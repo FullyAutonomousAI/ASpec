@@ -172,6 +172,10 @@ compressor/indexer, head, mapping and mixed dtype. See [export](evaluation.md).
 
 ## DSA: token-level sparse attention
 
+The [three-stage runnable example](../../examples/qwen3-8b-dsa/README.md) connects
+the existing dense, indexer and sparse configurations, with stage-local recovery
+instructions and native export.
+
 DSA uses a weighted-ReLU Lightning Indexer to select original context tokens **for each Draft query**.
 It neither compresses tokens like CSA/QSA nor shares one selection across a whole Draft block.
 The selected original K/V and the complete current bidirectional Draft block feed attention;

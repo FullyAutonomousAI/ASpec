@@ -34,6 +34,9 @@ For a preplanned split, keep `training.lr_total_steps` equal to the **full** hor
 even when the first `num_train_steps` is smaller. Do not silently change data/objective/topology/model
 semantics across exact resume. Iteration names are one ahead of completed steps. Hidden `.incomplete`
 staging is not published recovery state. Uncommitted features may be recomputed.
+With asynchronous packing, those samples may form different rows after restart;
+checkpoint-state restoration does not guarantee the same document count or
+numerical trajectory at a later optimizer step as an uninterrupted run.
 
 ## New phases and initial weights
 
@@ -130,6 +133,10 @@ DSpark/DFlash Dense FFNs use the Draft's `hidden_act` through the pinned Transfo
 The GQA path executes `default`, `linear` and `yarn` RoPE from `rope_scaling` or `rope_parameters`; linear/YaRN use the pinned Transformers formulas. Unsupported scaling types and partial-head rotary settings are rejected. The effective scaling and activation remain part of the model configuration used for checkpoint recovery and export.
 
 ## Offline Target features
+
+The [complete offline example](../../examples/qwen3-8b-offline/README.md) provides
+paired materialization/replay configs and commands for evaluation, exact resume and
+native export on one GPU used sequentially.
 
 Materialize Target features once, then train Drafts from disk with zero Target GPUs. Draft architectures can share the dataset when they request the same Target feature contract. The current path uses single-node, single-Draft, CP1 training and CPU Store/TCP transport.
 

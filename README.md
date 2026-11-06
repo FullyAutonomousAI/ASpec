@@ -60,6 +60,8 @@ Check [supported paths and limitations](docs/support.md), then browse the [recip
 3. [Choose a training recipe](docs/user-guide/recipes.md) and [prepare training data](docs/user-guide/data.md).
 
 Recipes cover Qwen3-8B, Qwen3.5-9B Native MTP, Qwen3.8-27B long context, and Ling tiny/flash 3.0/flash 3.1.
+For complete feature workflows, see [offline feature generation and replay](examples/qwen3-8b-offline/README.md)
+and [DSA dense → indexer → sparse training](examples/qwen3-8b-dsa/README.md).
 
 From the repository root:
 

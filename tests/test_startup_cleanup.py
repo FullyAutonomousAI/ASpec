@@ -116,7 +116,7 @@ def test_saver_failure_fences_before_source_cleanup(monkeypatch, fence_ok):
         [engine],
         saver,
         owner,
-        pg,
+        (pg, [0], [0]),
     )
     assert result["state"] == "completed_with_errors"
     if fence_ok:
@@ -132,6 +132,32 @@ def test_saver_failure_fences_before_source_cleanup(monkeypatch, fence_ok):
         assert ("pg", pg) not in events
         assert ("kill", engine) not in events
         assert result["source_teardown"] == "blocked"
+
+
+@pytest.mark.parametrize("source_state", ["completed", "completed_with_errors"])
+def test_materialization_releases_only_the_placement_handle_after_source_cleanup(
+    monkeypatch, source_state
+):
+    from aspec.offline import generate as module
+
+    pg = object()
+    events = []
+    monkeypatch.setattr(
+        module, "_safe_training_cleanup",
+        lambda *a, **k: events.append("sources") or {"state": source_state},
+    )
+    remove = MagicMock(side_effect=lambda group: events.append("placement"))
+    monkeypatch.setattr(module.ray.util, "remove_placement_group", remove)
+    # create_placement_groups returns (handle, bundle indices, device ids).
+    result = module._cleanup_materialization(
+        SimpleNamespace(), None, None, None, [], None, None, (pg, [0], [2])
+    )
+    assert result["state"] == source_state
+    if source_state == "completed":
+        remove.assert_called_once_with(pg)
+        assert events == ["sources", "placement"]
+    else:
+        remove.assert_not_called()
 
 
 def test_main_disconnects_job_actors_after_initialization_error(monkeypatch, tmp_path):

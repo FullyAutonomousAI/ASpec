@@ -1,0 +1,57 @@
+# Qwen3-8B DSpark feature materialization; see examples/qwen3-8b-offline/README.md.
+# Uses the retained TorchSpec-derived offline generator and ASpec lifecycle validation.
+# One Target GPU is used during generation; no Draft trainer is started.
+model:
+  target_model_path: ${oc.env:ASPEC_TARGET_MODEL}
+  native_context_length: 32768
+  trust_remote_code: false
+  draft_model_config: aspec/config/dspark_draft_config.json
+dataset:
+  train_data_path: ${oc.env:ASPEC_TRAIN_DATA}
+  eval_data_path: ${oc.env:ASPEC_EVAL_DATA}
+  chat_template: qwen3-instruct
+  prompt_key: conversations
+  min_loss_tokens: 14
+  shuffle_dataset: false
+training:
+  attention_backend: cudnn_flex_attention
+  draft_context_parallel_size: 1
+  dflash_packing: false
+  micro_batch_size: 1
+  draft_accumulation_steps: 1
+  training_num_gpus_per_node: 1
+  training_num_nodes: 1
+  fsdp_strategy: REPLICATE
+  max_seq_length: 4096
+  num_epochs: 1
+  dspark_num_target_layers: 5
+  dspark_num_anchors: 64
+  dflash_block_size: 7
+inference:
+  inference_engine_type: sgl
+  inference_num_gpus: 1
+  inference_num_gpus_per_engine: 1
+  inference_num_gpus_per_node: 1
+  target_prefill_memory_optimized: false
+  store_last_hidden_states: true
+  inference_batch_size: 1
+  inference_fetch_batch: 2
+  inference_buffer_threshold: 2
+  max_sample_pool_size: 4
+  sglang:
+    tp_size: 1
+    mem_fraction_static: 0.5
+mooncake:
+  data_plane: store
+  protocol: tcp
+  enable_gpu_direct: false
+  require_nvlink: false
+  hidden_dim: 4096
+  max_seq_len: 4096
+  global_segment_size: 8GB
+  local_buffer_size: 2GB
+  host_buffer_size: 2GB
+logging:
+  report_to: none
+output_dir: outputs/qwen3-8b-materialize
+cache_dir: cache/qwen3-8b-materialize

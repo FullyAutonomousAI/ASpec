@@ -143,7 +143,8 @@ def _cleanup_materialization(
         # Only release the reservation after source teardown has acknowledged.
         if inference_pg is not None and cleanup.get("state") == "completed":
             try:
-                ray.util.remove_placement_group(inference_pg)
+                pg, _, _ = inference_pg
+                ray.util.remove_placement_group(pg)
             except Exception as exc:
                 errors.append(f"placement_cleanup: {type(exc).__name__}: {exc}")
     if errors:

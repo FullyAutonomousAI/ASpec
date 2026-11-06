@@ -21,6 +21,11 @@ or disable evaluation/checkpointing; inspect each file before use.
 | [Qwen role-separated TCP](qwen3_8b_4k_multinode_tcp.yaml) | Separate Target and Draft nodes with shared storage |
 | [Qwen Target-generated quality protocol](qwen3_8b_dspark_target_generated.yaml) | Ten-pass training with held-out Target-generated data |
 | [TorchSpec-style input](sglang_qwen3_8b_dspark.yaml) | Fixed compatibility input, not rolling upstream support |
+| [Offline materialization](qwen3_8b_offline_materialize.yaml) / [replay](qwen3_8b_offline_replay.yaml) | Generate DSpark features once, then train with zero Target GPUs |
+
+For complete source-checkout workflows, follow the
+[offline generation, training and recovery example](../../examples/qwen3-8b-offline/README.md)
+or the [DSA three-stage script](../../examples/qwen3-8b-dsa/README.md).
 
 The 9B and 27B DSpark examples each start with one eight-GPU node: four TP1 Target engines and
 four Draft GPUs, cuDNN attention, MBS1, CP1 and 4K context. Set `ASPEC_TARGET_MODEL` to the matching local checkpoint
