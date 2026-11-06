@@ -1,0 +1,82 @@
+name: Build release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Verify tag matches package version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python - <<'PY'
+          import os
+          import tomllib
+          from pathlib import Path
+
+          version = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
+          expected = f"v{version}"
+          tag = os.environ["RELEASE_TAG"]
+          if tag != expected:
+              raise SystemExit(f"Release tag {tag!r} does not match package version: expected {expected!r}")
+          print(f"PASS release tag {tag}")
+          PY
+      - name: Install build tools
+        run: |
+          python -m venv "$RUNNER_TEMP/aspec-build-venv"
+          source "$RUNNER_TEMP/aspec-build-venv/bin/activate"
+          echo "$VIRTUAL_ENV/bin" >> "$GITHUB_PATH"
+          echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> "$GITHUB_ENV"
+          python -m pip install --upgrade pip build
+      - name: Build source and wheel distributions
+        run: python -m tools.build_release --outdir dist
+      - name: Save audited distributions and runtime requirements
+        uses: actions/upload-artifact@v7
+        with:
+          name: aspec-distributions
+          path: dist/
+          if-no-files-found: error
+
+  wheel-install:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - uses: actions/download-artifact@v8
+        with:
+          name: aspec-distributions
+          path: dist/
+      - name: Verify distribution checksums
+        working-directory: dist
+        run: sha256sum --check SHA256SUMS
+      - name: Prepare isolated CPU installation fixture
+        run: |
+          python -m venv "$RUNNER_TEMP/aspec-wheel-venv"
+          source "$RUNNER_TEMP/aspec-wheel-venv/bin/activate"
+          echo "$VIRTUAL_ENV/bin" >> "$GITHUB_PATH"
+          echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> "$GITHUB_ENV"
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.13.0+cpu
+          python -m pip install -r requirements/ci-cpu.txt
+          # Deliberately test the wheel and patch CLI with a CPU dependency subset.
+          # This is not installation/acceptance of the production GPU runtime.
+          python -m pip install --no-deps dist/*.whl sglang==0.5.21
+      - name: Exercise installed commands outside the checkout
+        env:
+          CUDA_VISIBLE_DEVICES: ""
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
+        run: python tools/check_wheel_install.py

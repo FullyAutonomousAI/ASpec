@@ -30,9 +30,12 @@ python -m tools.build_release --outdir /absolute/path/to/new-release-dist
 
 Default tests are fast/offline. GPU, tokenizer, training and cuDNN gates need explicit switches
 declared in their test files. A skip is not GPU acceptance. Public CI checks lint, local doc links,
-compilation and packaging, plus a curated CPU/offline contract suite installed from
-`requirements/ci-cpu.txt`; it does not certify GPU health or replace the complete pinned-runtime
-suite above. Equivalent remote checks are not proof that hosted GitHub Actions has already run.
+compilation, plus a curated CPU/offline contract suite installed from `requirements/ci-cpu.txt`
+on pull requests and configured branch pushes. The separate [release build](.github/workflows/build-release.yml)
+workflow builds and audits sdist/wheel artifacts and checks wheel installation only when a `v*` tag
+is pushed; see [release instructions](docs/releasing.md). Neither workflow certifies GPU health or
+replaces the complete pinned-runtime suite above. Equivalent remote checks are not proof that hosted
+GitHub Actions has already run.
 
 For runtime/attention/data-plane changes, use the relevant [GPU and fault checks](docs/contributing/validation.md).
 Do not clean shared hosts with host-wide Ray/process commands. Follow the current task's remote environment

@@ -27,9 +27,16 @@ This command builds the sdist and then its wheel, audits both, collects the two 
 files under `runtime/`, and writes `SHA256SUMS`. It rejects a nonempty output directory.
 `python -m build` and `python -m tools.audit_release DIST` remain available separately.
 
-[GitHub CI](../.github/workflows/ci.yml) runs the same build command, saves the audited release bundle
-as the `aspec-distributions` workflow artifact, and runs an independent `wheel-install` job on
-Python 3.11. That job checks SHA256s, installs the built wheel in a dedicated CPU venv, and executes:
+[GitHub CI](../.github/workflows/ci.yml) runs source quality checks and CPU/offline contracts on pull
+requests and configured branch pushes. It does not build distributions. Packaging-related source
+contracts remain in that suite so resource and audit regressions can be found before tagging.
+
+The separate [release build workflow](../.github/workflows/build-release.yml) runs when a `v*` tag is
+pushed to GitHub. Creating a local tag alone does not trigger it. The tag must exactly match `v` plus
+the version in `pyproject.toml`, for example `v0.1.0rc1` for `0.1.0rc1`; a mismatch fails before
+building. The workflow runs the same build command, saves the audited release bundle as the
+`aspec-distributions` workflow artifact, and runs a dependent `wheel-install` job on Python 3.11.
+That job checks SHA256s, installs the built wheel in a dedicated CPU venv, and executes:
 
 ```bash
 python tools/check_wheel_install.py
@@ -60,6 +67,15 @@ distribution version and build provenance when available. A wheel does not borro
 an enclosing checkout; unavailable build revision remains unknown.
 
 ## Publish
+
+Before pushing a version tag, verify that its exact commit has passed the CI source checks and the
+applicable release checks above. The tag workflow does not rerun the source test suite. After pushing,
+require both `build` and `wheel-install` to pass; an uploaded artifact alone is not installation
+acceptance. A failed run can be rerun for the same tag after an infrastructure issue is resolved;
+source fixes require a new reviewed commit and version/tag.
+
+The release build only saves Actions artifacts. It does not create a GitHub Release or publish to
+PyPI; publication is a separate, explicitly authorized step.
 
 Review the exact artifacts, repository destination, version/tag and release notes. Summarize checks
 actually performed and any known limitations. Publish only the reviewed source and artifacts;
