@@ -27,11 +27,12 @@ connections on your hardware before training.
 | `qwen27b-long` | Qwen3.8-27B / DSpark | 1 node, 8 GPUs: 3 × TP2 Target + 2D (CP2); 256K-class | Distribute long-context training with CP |
 | `multinode` | Qwen3-8B / DSpark | 2 nodes × 8 GPUs; each 4T + 4D; 4K | Keep features node-local and synchronize gradients across nodes |
 
-The 27B recipe uses a 261,888-token cap, FA4 and CP2. Each TP2 Target replica admits one request,
+The [27B recipe](../../configs/recipes/qwen3_8_27b_256k_cudnn_cp2_nvlink.yaml)
+uses a 261,888-token cap, native cuDNN THD attention and CP2. Each TP2 Target replica admits one request,
 with two source slots. `inference.target_prefill_memory_optimized` stays disabled because the direct
 prefill path currently requires TP1. Size feature buffers and backend token capacity for your inputs;
 see [long-context validation](../contributing/validation.md#algorithm-capacity-and-fault-checks) for
-measured capacity and verification commands. Additional examples are under
+capacity checks and verification commands. Additional examples are under
 [configs/examples](../../configs/examples/README.md).
 
 For a short single-node DSpark run with cuDNN attention, CP1 and no packing, use the

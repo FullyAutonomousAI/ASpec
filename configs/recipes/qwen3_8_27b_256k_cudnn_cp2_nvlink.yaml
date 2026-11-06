@@ -1,9 +1,10 @@
 # Release training starting point: three passes, held-out eval and checkpoints.
 # Hyperparameters are not a convergence/quality claim; see docs/user-guide/recipes.md.
 # Portable execution template. See configs/README.md for required inputs and scope.
-# Adapted from AngelSpec's validated H200 Qwen3.8-27B 256K capacity-unlock
-# lane and expressed through ASpec's canonical schema. One 8-GPU node:
+# Adapted from AngelSpec's Qwen3.8-27B long-context configuration using
+# ASpec's canonical schema. One 8-GPU node:
 # three TP2 Target engines (six GPUs) and one two-rank Direct CP trainer.
+# Uses native cuDNN THD attention for the dense DSpark Draft.
 # Native prefill with optimized direct prefill disabled: one concurrent TP2 request
 # per replica and two source slots for the 261888-token workload.
 
@@ -27,7 +28,7 @@ dataset:
 
 training:
   dflash_packing: true
-  attention_backend: fa4
+  attention_backend: cudnn_flex_attention
   draft_context_parallel_size: 2
   micro_batch_size: 1
   draft_accumulation_steps: 2
@@ -73,6 +74,8 @@ inference:
   inference_batch_size: 1
   sglang:
     tp_size: 2
+    # Allow cold compilation during TP engine startup.
+    init_timeout: 900
     mem_fraction_static: 0.90
     extra_args:
       max_total_tokens: 262144
@@ -112,5 +115,5 @@ debug:
   performance_drain_steps: 1
   timeline_enabled: false
 
-output_dir: outputs/qwen3_8_27b_256k_fa4_cp2_nvlink
-cache_dir: cache/qwen3_8_27b_256k_fa4_cp2_nvlink
+output_dir: outputs/qwen3_8_27b_256k_cudnn_cp2_nvlink
+cache_dir: cache/qwen3_8_27b_256k_cudnn_cp2_nvlink

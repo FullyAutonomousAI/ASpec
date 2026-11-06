@@ -19,8 +19,14 @@ import csv
 import json
 from pathlib import Path
 
+from omegaconf import OmegaConf
+
 
 def audit_long_run(directory):
+    config = OmegaConf.load(Path(directory) / "config.yaml")
+    backend = OmegaConf.select(config, "training.attention_backend")
+    if backend not in {"fa4", "cudnn_flex_attention"}:
+        raise ValueError(f"Unsupported configured attention backend for long-context CP2: {backend!r}")
     evidence = json.loads((Path(directory) / "evidence.json").read_text())
     training = evidence.get("observations", {}).get("training", {})
     scheduler = training.get("scheduler", {})
@@ -32,14 +38,15 @@ def audit_long_run(directory):
         or scheduler.get("rows_dispatched", 0) < 1
         or scheduler.get("packed_tokens") != 261888 * scheduler.get("rows_dispatched", 0)
         or execution.get("context_parallel_size") != 2
-        or execution.get("attention_backend") != "fa4"
+        or execution.get("attention_backend") != backend
     ):
-        raise ValueError("Missing actual 261888-token packed work with FA4 CP2")
+        raise ValueError(f"Missing actual 261888-token packed work with {backend} CP2")
     return {
         "tokens_per_row": 261888,
         "rows": scheduler["rows_dispatched"],
         "packed_tokens": scheduler["packed_tokens"],
         "context_parallel_size": 2,
+        "attention_backend": backend,
     }
 
 

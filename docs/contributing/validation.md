@@ -89,16 +89,14 @@ bash tools/run_in_env.sh python -m tools.recipes export \
 
 The 27B bounded acceptance check (`accept qwen27b-long`) rejects a training Parquet containing
 any row shorter than 261,888 tokens. It also requires observed 261,888-token sequences and packed rows, positive dispatched work, and actual
-FA4/CP2 execution in both phases. It records device memory every second in `gpu-memory.csv` and
+CP2 execution with the configured attention backend in both phases (cuDNN by default).
+A different observed backend fails the check.
+It records device memory every second in `gpu-memory.csv` and
 per-device peaks/capacities in `acceptance.json`; missing observations fail acceptance. Sampled
 device-wide memory is distinct from an allocator peak and can include other processes, so use
 exclusive allocated GPUs. Synthetic inputs can establish capacity, but cannot establish quality.
 Ordinary `train qwen27b-long` runs may use shorter valid samples; the minimum length is an
 acceptance requirement, not a training input constraint.
-
-A bounded 261,888-token train/resume/export check on eight SM90 GPUs with 143,771 MiB each
-observed peaks of 118,578 MiB on Target and 99,987 MiB on Draft. These are observations for that
-configuration, not minimum-memory requirements or a guarantee for a different workload.
 
 To audit an existing train/resume/export receipt and its saved memory samples:
 

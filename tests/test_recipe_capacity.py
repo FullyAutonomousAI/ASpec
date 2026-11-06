@@ -19,8 +19,10 @@ import pytest
 from tools.validation.recipe_capacity import audit_long_run, summarize_memory
 
 
-@pytest.mark.parametrize("broken", [None, "short", "empty", "cp1", "padding"])
-def test_long_capacity_requires_observed_full_context(tmp_path, broken):
+@pytest.mark.parametrize("backend", ["fa4", "cudnn_flex_attention"])
+@pytest.mark.parametrize("broken", [None, "short", "empty", "cp1", "padding", "backend"])
+def test_long_capacity_requires_observed_full_context(tmp_path, broken, backend):
+    (tmp_path / "config.yaml").write_text(f"training:\n  attention_backend: {backend}\n")
     training = {
         "scheduler": {
             "observed_sequence_min": 261888,
@@ -29,7 +31,7 @@ def test_long_capacity_requires_observed_full_context(tmp_path, broken):
             "rows_dispatched": 4,
             "packed_tokens": 4 * 261888,
         },
-        "execution": {"context_parallel_size": 2, "attention_backend": "fa4"},
+        "execution": {"context_parallel_size": 2, "attention_backend": backend},
     }
     if broken == "short":
         training["scheduler"]["observed_sequence_min"] = 128
@@ -39,12 +41,25 @@ def test_long_capacity_requires_observed_full_context(tmp_path, broken):
         training["execution"]["context_parallel_size"] = 1
     elif broken == "padding":
         training["scheduler"]["packed_tokens"] -= 1
+    elif broken == "backend":
+        training["execution"]["attention_backend"] = (
+            "fa4" if backend == "cudnn_flex_attention" else "cudnn_flex_attention"
+        )
     (tmp_path / "evidence.json").write_text(json.dumps({"observations": {"training": training}}))
     if broken:
         with pytest.raises(ValueError, match="actual"):
             audit_long_run(tmp_path)
     else:
-        assert audit_long_run(tmp_path)["tokens_per_row"] == 261888
+        result = audit_long_run(tmp_path)
+        assert result["tokens_per_row"] == 261888
+        assert result["attention_backend"] == backend
+
+
+def test_long_capacity_rejects_unsupported_configured_backend(tmp_path):
+    (tmp_path / "config.yaml").write_text("training:\n  attention_backend: math\n")
+    (tmp_path / "evidence.json").write_text("{}")
+    with pytest.raises(ValueError, match="configured attention backend"):
+        audit_long_run(tmp_path)
 
 
 def test_sampled_memory_requires_all_devices_and_repeated_samples(tmp_path):

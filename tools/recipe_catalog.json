@@ -115,7 +115,7 @@
   },
   "qwen27b-long": {
     "configs": [
-      "configs/recipes/qwen3_8_27b_256k_fa4_cp2_nvlink.yaml"
+      "configs/recipes/qwen3_8_27b_256k_cudnn_cp2_nvlink.yaml"
     ],
     "model": "Qwen3.8-27B",
     "nodes": 1,
