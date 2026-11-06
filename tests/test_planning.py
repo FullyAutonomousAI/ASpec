@@ -131,6 +131,12 @@ def test_reference_plan_separates_contract_policy_and_capability_states():
     assert decisions["data_lifecycle"]["resolved"] == "produce_dispatch_release_or_discard"
     assert decisions["capacity_control"]["requested"] == 64
     assert decisions["capacity_control"]["resolved"] == "ready_pool_watermark_with_bounded_inflight"
+    attention = decisions["draft_attention_execution"]
+    assert attention["requirement"] == "required"
+    assert attention["requested"]["attention_backend"] == "cudnn_flex_attention"
+    assert attention["resolved"]["attention_backend"] == "cudnn_flex_attention"
+    assert attention["effective"] is None
+    assert attention["effective_state"] == "pending_runtime_evidence"
     capacity = plan["policy"]["capacity"]["host_orchestrator"]
     assert capacity["sample_pool_semantics"] == "ready_watermark"
     assert capacity["inflight_sample_limit"] == 32
@@ -142,7 +148,6 @@ def test_reference_plan_separates_contract_policy_and_capability_states():
         "gpu_direct_transport",
         "target_prefill_output",
         "producer_consumer_pipeline",
-        "draft_attention_execution",
         "long_context_execution",
         "mixed_length_packing",
         "performance_measurement",
@@ -828,6 +833,26 @@ def test_nvlink_pipeline_and_draft_execution_are_explicit_capabilities():
     }
     assert plan["policy"]["capacity"]["transfer_storage"]["host_fallback_allowed"] is False
     assert plan["policy"]["capacity"]["transfer_storage"]["source_gpu_ring_slots"] == 16
+
+
+def test_sdpa_at_cp1_omits_specialized_draft_attention_execution():
+    config = _config(**{
+        "training.attention_backend": "sdpa",
+        "training.draft_context_parallel_size": 1,
+    })
+
+    plan = compile_execution_plan(config).to_dict()
+    decision = next(
+        item for item in plan["capabilities"]
+        if item["name"] == "draft_attention_execution"
+    )
+
+    assert decision["requirement"] == "optional"
+    assert decision["requested"]["attention_backend"] == "sdpa"
+    assert decision["resolved"] is None
+    assert decision["effective"] is None
+    assert decision["effective_state"] == "omitted"
+    assert {"capability": "draft_attention_execution", "reason": "not_requested"} in plan["omissions"]
 
 
 def test_cudnn_flex_attention_is_a_required_draft_execution_capability():
