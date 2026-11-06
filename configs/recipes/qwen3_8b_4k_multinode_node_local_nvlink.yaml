@@ -1,0 +1,151 @@
+# MIT License
+#
+# Copyright (c) 2026 LightSeek Foundation
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+# Adapted from the TorchSpec configuration examples at 6c042a87140a84d13839e341ece2c5c3ada918bc.
+# ASpec updates schema bindings, portable inputs and execution settings.
+
+# Release training starting point: three passes, held-out eval and checkpoints.
+# Hyperparameters are not a convergence/quality claim; see docs/user-guide/recipes.md.
+# Portable execution template. See configs/README.md for required inputs and scope.
+# Adapted from TorchSpec 6c042a87140a84d13839e341ece2c5c3ada918bc (MIT).
+# Two-node Qwen3-8B / DSpark 4K reference with 4 Target + 4 Draft per node.
+# Set ASPEC_NODE_0_IP, ASPEC_NODE_1_IP and ASPEC_TRAIN_DATA.
+# Target features are required to stay on their producer node and use NVLink;
+# Draft gradients still synchronize across the global eight-rank DP group.
+
+model:
+  target_model_path: ${oc.env:ASPEC_TARGET_MODEL}
+  native_context_length: 32768
+  trust_remote_code: false
+  draft_model_config: ${oc.env:ASPEC_DRAFT_CONFIG}
+
+dataset:
+  eval_interval: 100
+  eval_micro_batch_size: 1
+  train_data_path: ${oc.env:ASPEC_TRAIN_DATA}
+  eval_data_path: ${oc.env:ASPEC_EVAL_DATA}
+  chat_template: null
+  shuffle_dataset: true
+  min_loss_tokens: 32
+
+training:
+  attention_backend: cudnn_flex_attention
+  draft_context_parallel_size: 1
+  micro_batch_size: 1
+  draft_accumulation_steps: 64
+  learning_rate: 6e-4
+  min_lr: 6e-5
+  weight_decay: 0.0
+  max_concurrent_batches: 1
+  streaming_dispatch_with_training: true
+  pipeline_dispatch_with_training: true
+  max_grad_norm: 1.0
+  max_seq_length: 4096
+  num_epochs: 3
+  seed: 42
+  training_num_gpus_per_node: 4
+  training_num_nodes: 2
+  placement_strategy: custom
+  training_node_ips:
+    - ${oc.env:ASPEC_NODE_0_IP}
+    - ${oc.env:ASPEC_NODE_1_IP}
+  # Optional per-run network overrides: training.train_env_vars JSON.
+  # With no override NCCL/Gloo select the route from the live environment.
+  ttt_length: 7
+  fsdp_strategy: REPLICATE
+  fsdp_reduce_dtype: bfloat16
+  prefetch_depth: 1
+  save_interval: 100
+  save_per_epoch: false
+  save_final_checkpoint: true
+  warmup_ratio: 0.04
+  dflash_block_size: 7
+  dflash_packing: false
+  dspark_num_anchors: 512
+  dspark_num_target_layers: 5
+  dspark_loss_decay_gamma: 4.0
+  dspark_ce_loss_alpha: 0.1
+  dspark_l1_loss_alpha: 0.9
+  dspark_confidence_head_alpha: 1.0
+
+inference:
+  inference_engine_type: sgl
+  store_last_hidden_states: true
+  target_prefill_memory_optimized: true
+  inference_num_gpus: 8
+  inference_num_gpus_per_engine: 1
+  inference_num_gpus_per_node: 4
+  inference_node_ips:
+    - ${oc.env:ASPEC_NODE_0_IP}
+    - ${oc.env:ASPEC_NODE_1_IP}
+  inference_fetch_batch: 16
+  inference_buffer_threshold: 16
+  max_sample_pool_size: 16
+  inference_batch_size: 2
+  sglang:
+    tp_size: 1
+    mem_fraction_static: 0.5
+    extra_args:
+      max_running_requests: 2
+      max_total_tokens: 8704
+      max_prefill_tokens: 8704
+
+mooncake:
+  master_server_address: null
+  metadata_server: null
+  data_plane: transfer_engine
+  protocol: nvlink_intra
+  feature_affinity: node_local_required
+  require_nvlink: true
+  enable_gpu_direct: true
+  allow_host_fallback: false
+  gpu_ring_slots: 2
+  # Cover the complete ready window on any one engine during first-use
+  # endpoint handshakes; each slot is released only after its Draft consumer
+  # completes the generation-checked read.
+  source_gpu_ring_slots: 16
+  destination_gpu_ring_slots: 1
+  global_segment_size: 4GB
+  local_buffer_size: 512MB
+  max_seq_len: 4096
+  hidden_dim: 4096
+  kv_lease_ttl_s: 60
+  get_retry_max_wait_seconds: 120
+
+cluster:
+  mode: static_multi_node
+  storage_mode: node_local
+  preflight_timeout_seconds: 900
+  file_transfer_timeout_seconds: 600
+  require_homogeneous_gpus: true
+
+logging:
+  report_to: none
+
+debug:
+  enable_perf_metrics: true
+  performance_measurement_required: false
+  performance_warmup_steps: 2
+  performance_drain_steps: 1
+
+output_dir: ${oc.env:ASPEC_OUTPUT_DIR}
+cache_dir: ${oc.env:ASPEC_CACHE_DIR}

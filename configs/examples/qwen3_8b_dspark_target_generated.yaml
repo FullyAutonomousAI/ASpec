@@ -1,0 +1,91 @@
+# Supplementary configuration example; see the support matrix for supported workflows.
+# Inspect its inputs, step limits and support boundary before use.
+# Train from scratch on Target-generated single-turn non-thinking responses.
+# Convert the generated JSONL to the existing typed Parquet training boundary.
+# Ten dataset passes, GBS512; the public planner derives the actual step horizon.
+model:
+  target_model_path: Qwen/Qwen3-8B
+  native_context_length: 32768
+  trust_remote_code: false
+  draft_model_config: aspec/config/dspark_draft_config.json
+dataset:
+  train_data_path: ${oc.env:ASPEC_TRAIN_DATA}
+  eval_data_path: ${oc.env:ASPEC_EVAL_DATA}
+  chat_template: qwen3-instruct
+  prompt_key: conversations
+  min_loss_tokens: 14
+  shuffle_dataset: true
+  dataset_seed: 20260916
+  eval_interval: 128
+  eval_micro_batch_size: 1
+training:
+  attention_backend: cudnn_flex_attention
+  micro_batch_size: 1
+  draft_accumulation_steps: 128
+  learning_rate: 6e-4
+  min_lr: 0.0
+  weight_decay: 0.0
+  max_grad_norm: 1.0
+  max_seq_length: 4096
+  num_epochs: 10
+  warmup_ratio: 0.04
+  seed: 42
+  training_num_gpus_per_node: 4
+  training_num_nodes: 1
+  placement_strategy: inference_first
+  fsdp_strategy: REPLICATE
+  fsdp_reduce_dtype: bfloat16
+  compile_model: false
+  max_concurrent_batches: 1
+  streaming_dispatch_with_training: true
+  pipeline_dispatch_with_training: true
+  prefetch_depth: 1
+  save_interval: 128
+  save_per_epoch: false
+  save_final_checkpoint: true
+  max_checkpoints: 3
+  dflash_block_size: 7
+  dflash_packing: false
+  dspark_num_anchors: 512
+  dspark_num_target_layers: 5
+  dspark_loss_decay_gamma: 4.0
+  dspark_ce_loss_alpha: 0.1
+  dspark_l1_loss_alpha: 0.9
+  dspark_confidence_head_alpha: 1.0
+inference:
+  inference_engine_type: sgl
+  store_last_hidden_states: true
+  target_prefill_memory_optimized: true
+  inference_num_gpus: 4
+  inference_num_gpus_per_engine: 1
+  inference_num_gpus_per_node: 8
+  inference_fetch_batch: 8
+  inference_buffer_threshold: 8
+  max_sample_pool_size: 32
+  inference_batch_size: 2
+  sglang:
+    tp_size: 1
+    mem_fraction_static: 0.5
+mooncake:
+  data_plane: transfer_engine
+  protocol: nvlink_intra
+  require_nvlink: true
+  enable_gpu_direct: true
+  allow_host_fallback: false
+  enable_hard_pin: true
+  max_seq_len: 4096
+  hidden_dim: 4096
+  global_segment_size: 64GB
+  local_buffer_size: 8GB
+  host_buffer_size: 14GB
+  gpu_ring_slots: 12
+  source_gpu_ring_slots: 12
+  destination_gpu_ring_slots: 1
+  kv_lease_ttl_s: 600
+  get_retry_max_wait_seconds: 600
+logging:
+  report_to: none
+debug:
+  enable_perf_metrics: true
+output_dir: outputs/qwen3-8b-dspark-target-generated
+cache_dir: cache/qwen3-8b-dspark-target-generated

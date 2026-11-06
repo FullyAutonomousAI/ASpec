@@ -1,0 +1,291 @@
+--- a/angelspec/models/dflash.py
++++ b/angelspec/models/dflash.py
+@@ -125,6 +125,8 @@
+       - Per-position loss_mask application
+     """
+ 
++    prediction_offset = 0
++
+     def __init__(
+         self,
+         draft_model,
+@@ -652,6 +654,7 @@
+         injected_anchors: Optional[torch.Tensor] = None,
+         injected_keep_mask: Optional[torch.Tensor] = None,
+         return_draft: bool = False,
++        return_loss_terms: bool = False,
+     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict]:
+         """Full DFlash training forward pass.
+ 
+@@ -715,10 +718,19 @@
+ 
+         # 7. Labels first (same-position prediction: slot k predicts token at
+         #    anchor+k), so we can build ``prev_token_ids`` for the logits hook.
+-        label_offsets = torch.arange(0, self.block_size, device=device).view(1, 1, -1)
++        label_offsets = torch.arange(
++            self.prediction_offset, self.block_size + self.prediction_offset, device=device
++        ).view(1, 1, -1)
+         label_indices = anchor_positions.unsqueeze(-1) + label_offsets  # [B, n_blocks, block_size]
+         valid_label_mask = label_indices < seq_len
+         safe_label_indices = label_indices.clamp(max=seq_len - 1)
++        if self.prediction_offset:
++            safe_label_indices = torch.where(
++                block_keep_mask.unsqueeze(-1), safe_label_indices, torch.zeros_like(safe_label_indices)
++            )
++            if last_hidden_states is not None and target_norm is not None:
++                last_hidden_states = target_norm(last_hidden_states).to(lm_head_weight.dtype)
++                target_norm = None
+ 
+         target_ids = torch.gather(
+             input_ids.unsqueeze(1).expand(-1, n_blocks, -1),
+@@ -743,7 +755,7 @@
+             or (self.e2e_tv_loss_weight > 0.0 and last_hidden_states is not None)
+             or self._extra_distill_needed()
+         )
+-        if chunk > 0 and self.loss_objective == "decay" and not distill_active:
++        if chunk > 0 and self.loss_objective == "decay" and not distill_active and not self.prediction_offset:
+             return self._forward_chunked_decay(
+                 draft_hidden=draft_hidden,
+                 target_ids=target_ids,
+@@ -774,7 +786,8 @@
+         weight_mask = weight_mask * valid_label_mask.float()
+ 
+         pos_in_block = torch.arange(self.block_size, device=device).view(1, 1, -1)
+-        weight_mask = weight_mask * (pos_in_block > 0).float()
++        if not self.prediction_offset:
++            weight_mask = weight_mask * (pos_in_block > 0).float()
+ 
+         original_loss_mask_gathered = torch.gather(
+             loss_mask.unsqueeze(1).expand(-1, n_blocks, -1),
+@@ -782,6 +795,12 @@
+             safe_label_indices,
+         )
+         weight_mask = weight_mask * original_loss_mask_gathered
++        if self.prediction_offset:
++            if ctx_doc_ids is not None:
++                label_docs = ctx_doc_ids.unsqueeze(1).expand(-1, n_blocks, -1).gather(2, safe_label_indices)
++                anchor_docs = ctx_doc_ids.gather(1, anchor_positions)
++                weight_mask *= (label_docs == anchor_docs.unsqueeze(-1)).float()
++            weight_mask = (weight_mask > 0.5).to(torch.int32).cumprod(-1).float()
+ 
+         # Binary mask BEFORE objective weighting — accuracy measures "did we
+         # predict correctly?" uniformly; weighting only shapes gradient.
+@@ -821,7 +840,9 @@
+             and self.loss_decay_gamma > 0
+         ):
+             k = torch.arange(self.block_size, device=device).view(1, 1, -1)
+-            decay_weights = torch.exp(-(k - 1).clamp(min=0).float() / self.loss_decay_gamma)
++            decay_weights = torch.exp(
++                -(k - 1 + self.prediction_offset).clamp(min=0).float() / self.loss_decay_gamma
++            )
+             objective_weights = weight_mask * decay_weights
+         elif self.loss_objective == "dpace":
+             dpace_weights = torch.ones_like(weight_mask)
+@@ -835,7 +856,8 @@
+             objective_weights = weight_mask * dpace_weights
+ 
+         flat_weights = objective_weights.view(-1)
+-        valid_token_count = flat_weights.sum().clamp(min=1e-6)
++        raw_denominator = flat_weights.sum()
++        valid_token_count = raw_denominator.clamp(min=1e-6)
+         loss = (loss_per_token * flat_weights).sum() / valid_token_count
+ 
+         # 9c. Optional KL / LK distillation vs the target's true last-layer logits.
+@@ -977,6 +999,13 @@
+             ).detach()
+         loss_components.update(extra_components)
+ 
++        loss_terms = (
++            loss * raw_denominator,
++            raw_denominator.detach(),
++            {key: (value * raw_denominator.detach(), raw_denominator.detach())
++             for key, value in loss_components.items()},
++        ) if return_loss_terms else None
++
+         if return_draft:
+             # Half on-policy OPD: hand back the grad-carrying draft hidden + the
+             # (detached) proposal ids / anchors so the trainer can build the tree,
+@@ -996,6 +1025,7 @@
+                 count_per_position,
+                 loss_components,
+                 opd,
++                *((loss_terms,) if return_loss_terms else ()),
+             )
+ 
+         return (
+@@ -1005,6 +1035,7 @@
+             acc_per_position,
+             count_per_position,
+             loss_components,
++            *((loss_terms,) if return_loss_terms else ()),
+         )
+ 
+     def _forward_chunked_decay(
+--- a/angelspec/models/dspark.py
++++ b/angelspec/models/dspark.py
+@@ -7,6 +7,14 @@
+ class DSparkModel(DFlashModel):
+     """DSpark training wrapper (DFlash backbone + Markov / confidence heads)."""
+ 
++    prediction_offset = 1
++
++    def forward(self, *args, **kwargs):
++        teacher = kwargs.get("last_hidden_states", args[4] if len(args) > 4 else None)
++        if self._extra_distill_needed() and teacher is None:
++            raise ValueError("DSpark confidence loss requires target last_hidden_states")
++        return super().forward(*args, **kwargs)
++
+     def __init__(
+         self,
+         draft_model,
+--- a/angelspec/training/dflash_trainer.py
++++ b/angelspec/training/dflash_trainer.py
+@@ -56,6 +56,9 @@
+         "l1_loss",
+         "e2e_tv_loss",
+     ]
++
++    _pool_loss_terms = False
++    _anchor_slot_offset = 1
+ 
+     def __init__(self, args: Namespace):
+         super().__init__(args)
+@@ -399,7 +402,11 @@
+             ctx_doc_ids=ctx_doc_ids,
+             base_position_ids=base_position_ids,
+             return_draft=opd_on,
++            **({"return_loss_terms": True} if self._pool_loss_terms else {}),
+         )
++        if self._pool_loss_terms:
++            self._last_loss_terms = out[-1]
++            out = out[:-1]
+         if opd_on:
+             (
+                 loss,
+@@ -413,6 +420,12 @@
+             opd_loss, opd_metrics = self._compute_opd_loss(input_ids, opd)
+             loss = loss + float(getattr(self.args, "dflash_opd_weight", 1.0)) * opd_loss
+             self._last_opd_metrics = opd_metrics
++            if self._pool_loss_terms:
++                numerator, denominator, components = self._last_loss_terms
++                self._last_loss_terms = (
++                    numerator + float(getattr(self.args, "dflash_opd_weight", 1.0)) * opd_loss * denominator,
++                    denominator, components,
++                )
+         else:
+             (
+                 loss,
+@@ -607,6 +620,15 @@
+         """Reduce extra scalar loss components into ``{prefix}{key}`` global means."""
+         out: dict = {}
+         for key in self._extra_loss_component_keys:
++            if self._pool_loss_terms:
++                pairs = [m["_loss_component_terms"][key] for m in all_step_metrics
++                         if key in m.get("_loss_component_terms", {})]
++                if pairs:
++                    totals = torch.stack([torch.stack(pair) for pair in pairs]).sum(0).float()
++                    if dist.is_initialized() and dist.get_world_size() > 1:
++                        dist.all_reduce(totals)
++                    out[f"{prefix}{key}"] = (totals[0] / totals[1].clamp(min=1e-6)).item()
++                continue
+             vals = [m[key] for m in all_step_metrics if key in m]
+             if not vals:
+                 continue
+@@ -706,9 +728,9 @@
+         )
+ 
+         # Drop anchor slot (index 0) — see _aggregate_metrics for rationale.
+-        pred_loss_pp = avg_loss_pp[1:]
+-        pred_acc_pp = avg_acc_pp[1:]
+-        pred_count_pp = count_pp[1:]
++        pred_loss_pp = avg_loss_pp[self._anchor_slot_offset :]
++        pred_acc_pp = avg_acc_pp[self._anchor_slot_offset :]
++        pred_count_pp = count_pp[self._anchor_slot_offset :]
+ 
+         cumulative = 1.0
+         simulated_acc_len = 0.0
+@@ -768,9 +790,22 @@
+ 
+         evt_bwd_s.record()
+         loss_scale = batch.get("_loss_scale") if isinstance(batch, dict) else None
+-        total_loss = self._backward(
+-            loss, accumulation_steps=accumulation_steps, loss_scale=loss_scale
+-        )
++        if self._pool_loss_terms:
++            numerator, denominator, _ = self._last_loss_terms
++            if batch_idx == 0:
++                self._accumulated_loss_denominator = denominator.detach().clone()
++            else:
++                self._accumulated_loss_denominator.add_(denominator.detach())
++            self._backward(numerator, accumulation_steps=accumulation_steps)
++            if batch_idx == num_batches - 1:
++                self._normalize_accumulated_gradients(
++                    self._accumulated_loss_denominator, accumulation_steps
++                )
++            total_loss = loss
++        else:
++            total_loss = self._backward(
++                loss, accumulation_steps=accumulation_steps, loss_scale=loss_scale
++            )
+         evt_bwd_e.record()
+ 
+         return {
+@@ -784,6 +819,7 @@
+             "_fwd_events": (evt_fwd_s, evt_fwd_e),
+             "_bwd_events": (evt_bwd_s, evt_bwd_e),
+             **loss_components,
++            **({"_loss_component_terms": self._last_loss_terms[2]} if self._pool_loss_terms else {}),
+         }
+ 
+     def _aggregate_metrics(
+@@ -802,9 +838,9 @@
+         # Skip index 0 (anchor slot, always zero); indices 1..B-1 are the
+         # predicted tokens at 1..B-1 steps past the anchor. Re-index to 0..B-2
+         # so the naming matches Eagle3 (acc_0 = first predicted token).
+-        pred_loss_pp = avg_loss_pp[1:]
+-        pred_acc_pp = avg_acc_pp[1:]
+-        pred_count_pp = count_pp[1:]
++        pred_loss_pp = avg_loss_pp[self._anchor_slot_offset :]
++        pred_acc_pp = avg_acc_pp[self._anchor_slot_offset :]
++        pred_count_pp = count_pp[self._anchor_slot_offset :]
+ 
+         # Simulated accepted length: acc_0 + acc_0*acc_1 + ... + prod(acc_0..acc_{B-2})
+         # Models the expected number of consecutively accepted draft tokens.
+--- a/angelspec/training/dspark_trainer.py
++++ b/angelspec/training/dspark_trainer.py
+@@ -24,6 +24,9 @@
+ class DSparkTrainer(DFlashTrainer):
+     """DSpark-specific trainer (DFlash backbone + EAGLE-style heads)."""
+ 
++    _pool_loss_terms = True
++    _anchor_slot_offset = 0
++
+     # DSpark reuses the unified DFlash loss (ce/kl/lk/l1 via loss_components) and
+     # adds the confidence-head term.
+     _extra_loss_component_keys = ["ce_loss", "kl_loss", "lk_loss", "l1_loss", "confidence_loss"]
+@@ -39,7 +42,25 @@
+         self.ce_loss_alpha = getattr(args, "dspark_ce_loss_alpha", 0.1)
+         self.l1_loss_alpha = getattr(args, "dspark_l1_loss_alpha", 0.9)
+         self.confidence_head_alpha = getattr(args, "dspark_confidence_head_alpha", 1.0)
++        self._distill_enabled = bool(getattr(args, "last_hidden_states_prenorm", False)) and (
++            self._distill_enabled or self.l1_loss_alpha > 0 or self.confidence_head_alpha > 0
++        )
+ 
++    def _normalize_accumulated_gradients(self, local_denominator, accumulation_steps):
++        denominator = local_denominator.detach().clone()
++        world_size = dist.get_world_size() if dist.is_initialized() else 1
++        if world_size > 1:
++            dist.all_reduce(denominator)
++        scale = torch.where(
++            denominator > 0,
++            (world_size * accumulation_steps) / denominator.clamp(min=1e-6),
++            torch.zeros_like(denominator),
++        )
++        with torch.no_grad():
++            for parameter in self.optimizer.model_params:
++                if parameter.grad is not None:
++                    parameter.grad.mul_(scale)
++
+     # ------------------------------------------------------------------
+     # Model init (copied from DFlashTrainer.init_model; the two model-build
+     # sites are swapped for DSpark. This is the B-migration seam — see header.)

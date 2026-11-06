@@ -1,0 +1,689 @@
+# ASpec training patch for official SGLang v0.5.21, e00930c5489053f26d86b179cee0d087f846acbb.
+# Adapted SGLang source retains its original notices (Apache-2.0; licenses/SGLang-LICENSE).
+# Direct-prefill/data-plane changes also retain TorchSpec MIT and AngelSpec Apache-2.0 ancestry;
+# see licenses/TorchSpec-LICENSE and licenses/AngelSpec-LICENSE.
+diff --git a/python/sglang/kernels/ops/attention/fla/chunk_delta_h.py b/python/sglang/kernels/ops/attention/fla/chunk_delta_h.py
+index 84ae081..b537c70 100644
+--- a/python/sglang/kernels/ops/attention/fla/chunk_delta_h.py
++++ b/python/sglang/kernels/ops/attention/fla/chunk_delta_h.py
+@@ -87,16 +87,17 @@ def chunk_gated_delta_rule_fwd_kernel_h_blockdim64(
+     i_n, i_h = i_nh // H, i_nh % H
+     if IS_VARLEN:
+         bos, eos = (
+-            tl.load(cu_seqlens + i_n).to(tl.int32),
+-            tl.load(cu_seqlens + i_n + 1).to(tl.int32),
++            tl.load(cu_seqlens + i_n).to(tl.int64),
++            tl.load(cu_seqlens + i_n + 1).to(tl.int64),
+         )
+-        T = eos - bos
++        # Global addresses are int64; block-pointer local offsets stay int32.
++        T = (eos - bos).to(tl.int32)
+         NT = tl.cdiv(T, BT)
+-        boh = tl.load(chunk_offsets + i_n).to(tl.int32)
++        boh = tl.load(chunk_offsets + i_n).to(tl.int64)
+     else:
+-        bos, eos = i_n * T, i_n * T + T
++        bos, eos = i_n.to(tl.int64) * T, i_n.to(tl.int64) * T + T
+         NT = tl.cdiv(T, BT)
+-        boh = i_n * NT
++        boh = i_n.to(tl.int64) * NT
+ 
+     # [BV, BK]
+     b_h1 = tl.zeros([BV, 64], dtype=tl.float32)
+@@ -108,12 +109,12 @@ def chunk_gated_delta_rule_fwd_kernel_h_blockdim64(
+         b_h4 = tl.zeros([BV, 64], dtype=tl.float32)
+ 
+     # calculate offset
+-    h += ((boh * H + i_h) * V * K).to(tl.int64)
+-    v += ((bos * H + i_h) * V).to(tl.int64)
+-    k += ((bos * Hg + i_h // (H // Hg)) * K).to(tl.int64)
+-    w += ((bos * H + i_h) * K).to(tl.int64)
++    h += (boh * H + i_h) * V * K
++    v += (bos * H + i_h) * V
++    k += (bos * Hg + i_h // (H // Hg)) * K
++    w += (bos * H + i_h) * K
+     if SAVE_NEW_VALUE:
+-        v_new += ((bos * H + i_h) * V).to(tl.int64)
++        v_new += (bos * H + i_h) * V
+     stride_v = H * V
+     stride_h = H * V * K
+     stride_k = Hg * K
+@@ -136,9 +137,7 @@ def chunk_gated_delta_rule_fwd_kernel_h_blockdim64(
+ 
+     if TRACK_STATE:
+         i_track = tl.load(track_chunk_idx + i_n).to(tl.int32)
+-        p_track_base = track_state + (i_n * stride_track_state + i_h * V * K).to(
+-            tl.int64
+-        )
++        p_track_base = track_state + i_n.to(tl.int64) * stride_track_state + i_h * V * K
+     else:
+         i_track = -1
+         p_track_base = track_state
+@@ -166,22 +165,22 @@ def chunk_gated_delta_rule_fwd_kernel_h_blockdim64(
+     # main recurrence
+     for i_t in range(NT):
+         p_h1 = tl.make_block_ptr(
+-            h + i_t * stride_h, (V, K), (K, 1), (i_v * BV, 0), (BV, 64), (1, 0)
++            h + i_t.to(tl.int64) * stride_h, (V, K), (K, 1), (i_v * BV, 0), (BV, 64), (1, 0)
+         )
+         tl.store(p_h1, b_h1.to(p_h1.dtype.element_ty), boundary_check=(0, 1))
+         if K > 64:
+             p_h2 = tl.make_block_ptr(
+-                h + i_t * stride_h, (V, K), (K, 1), (i_v * BV, 64), (BV, 64), (1, 0)
++                h + i_t.to(tl.int64) * stride_h, (V, K), (K, 1), (i_v * BV, 64), (BV, 64), (1, 0)
+             )
+             tl.store(p_h2, b_h2.to(p_h2.dtype.element_ty), boundary_check=(0, 1))
+         if K > 128:
+             p_h3 = tl.make_block_ptr(
+-                h + i_t * stride_h, (V, K), (K, 1), (i_v * BV, 128), (BV, 64), (1, 0)
++                h + i_t.to(tl.int64) * stride_h, (V, K), (K, 1), (i_v * BV, 128), (BV, 64), (1, 0)
+             )
+             tl.store(p_h3, b_h3.to(p_h3.dtype.element_ty), boundary_check=(0, 1))
+         if K > 192:
+             p_h4 = tl.make_block_ptr(
+-                h + i_t * stride_h, (V, K), (K, 1), (i_v * BV, 192), (BV, 64), (1, 0)
++                h + i_t.to(tl.int64) * stride_h, (V, K), (K, 1), (i_v * BV, 192), (BV, 64), (1, 0)
+             )
+             tl.store(p_h4, b_h4.to(p_h4.dtype.element_ty), boundary_check=(0, 1))
+ 
+diff --git a/python/sglang/kernels/ops/attention/fla/layernorm_gated.py b/python/sglang/kernels/ops/attention/fla/layernorm_gated.py
+--- a/python/sglang/kernels/ops/attention/fla/layernorm_gated.py
++++ b/python/sglang/kernels/ops/attention/fla/layernorm_gated.py
+@@ -107,3 +107,4 @@
+     # Map the program id to the starting row of X and Y it should compute.
+-    row_start = tl.program_id(0) * ROWS_PER_BLOCK
++    # Strided Z views can exceed int32 element offsets during long prefills.
++    row_start = tl.program_id(0).to(tl.int64) * ROWS_PER_BLOCK
+     group = tl.program_id(1)
+diff --git a/python/sglang/kernels/ops/attention/fused_qk_rmsnorm_rope_gate.py b/python/sglang/kernels/ops/attention/fused_qk_rmsnorm_rope_gate.py
+--- a/python/sglang/kernels/ops/attention/fused_qk_rmsnorm_rope_gate.py
++++ b/python/sglang/kernels/ops/attention/fused_qk_rmsnorm_rope_gate.py
+@@ -63,5 +63,6 @@
+ ):
+-    token = tl.program_id(0)
++    # Widen before token * stride: long Q+gate tensors exceed int32 addresses.
++    token = tl.program_id(0).to(tl.int64)
+     head = tl.program_id(1)
+     is_k = head >= NUM_Q_HEADS
+     local_head = tl.where(is_k, head - NUM_Q_HEADS, head)
+diff --git a/python/sglang/kernels/ops/attention/triton_gdn_fused_proj.py b/python/sglang/kernels/ops/attention/triton_gdn_fused_proj.py
+index e1f8fb7..ebcd404 100644
+--- a/python/sglang/kernels/ops/attention/triton_gdn_fused_proj.py
++++ b/python/sglang/kernels/ops/attention/triton_gdn_fused_proj.py
+@@ -30,7 +30,7 @@ def fused_qkvzba_split_reshape_cat_kernel(
+     HEAD_QK: tl.constexpr,
+     HEAD_V: tl.constexpr,
+ ):
+-    i_bs, i_qk = tl.program_id(0), tl.program_id(1)
++    i_bs, i_qk = tl.program_id(0).to(tl.int64), tl.program_id(1)
+     QKVZ_DIM_T: tl.constexpr = HEAD_QK * 2 + NUM_HEADS_V // NUM_HEADS_QK * HEAD_V * 2
+     BA_DIM_T: tl.constexpr = NUM_HEADS_V // NUM_HEADS_QK * 2
+     QKV_DIM_T: tl.constexpr = HEAD_QK * 2 + NUM_HEADS_V // NUM_HEADS_QK * HEAD_V
+@@ -179,7 +179,7 @@ def fused_qkvzba_split_reshape_cat_contiguous_kernel(
+     HEAD_V: tl.constexpr,
+     V_POW2: tl.constexpr,
+ ):
+-    i_bs, i_qk = tl.program_id(0), tl.program_id(1)
++    i_bs, i_qk = tl.program_id(0).to(tl.int64), tl.program_id(1)
+ 
+     V_PER_GROUP: tl.constexpr = NUM_HEADS_V // NUM_HEADS_QK
+ 
+@@ -682,3 +682,3 @@ def fused_qkv_split_gdn_prefill_kernel(
+ ):
+-    i_t = tl.program_id(0)
++    i_t = tl.program_id(0).to(tl.int64)
+     offsets = tl.arange(0, BLOCK_SIZE)
+diff --git a/python/sglang/kernels/ops/mamba/causal_conv1d_triton.py b/python/sglang/kernels/ops/mamba/causal_conv1d_triton.py
+--- a/python/sglang/kernels/ops/mamba/causal_conv1d_triton.py
++++ b/python/sglang/kernels/ops/mamba/causal_conv1d_triton.py
+@@ -87,2 +87,3 @@
+-    token_offset = BLOCK_M * chunk_offset
++    # Promote the global token offset before multiplying by channel strides.
++    token_offset = (BLOCK_M * chunk_offset).to(tl.int64)
+     segment_len = min(BLOCK_M, seqlen - token_offset)
+diff --git a/python/sglang/srt/managers/scheduler.py b/python/sglang/srt/managers/scheduler.py
+index a7d8bae..a0274c4 100644
+--- a/python/sglang/srt/managers/scheduler.py
++++ b/python/sglang/srt/managers/scheduler.py
+@@ -2470,6 +2470,9 @@ class Scheduler(
+                 self.enable_hicache_storage or self.enable_lmcache
+             ),
+             rust_server=self.rust_server,
++            feature_publisher=getattr(
++                self.tp_worker.model_runner.model, "aspec_feature_publisher", None
++            ),
+         )
+ 
+     def get_output_streamer_class(self) -> type[SchedulerOutputStreamer]:
+@@ -5187,6 +5190,9 @@ class Scheduler(
+     def flush_cache(self, empty_cache: bool = True):
+         """Flush memory pools (e.g., KV cache, Mamba cache) and optionally empty device allocator cache."""
+         if self.is_fully_idle(ignore_waiting=self._engine_paused):
++            publisher = getattr(self.tp_worker.model_runner.model, "aspec_feature_publisher", None)
++            if publisher is not None and not publisher.drain():
++                return False
+             self.cur_batch_for_debug = None
+             self.last_batch = None
+             self.tree_cache.reset()
+diff --git a/python/sglang/srt/managers/scheduler_components/flush_wrapper.py b/python/sglang/srt/managers/scheduler_components/flush_wrapper.py
+index 2a3b603..473d26e 100644
+--- a/python/sglang/srt/managers/scheduler_components/flush_wrapper.py
++++ b/python/sglang/srt/managers/scheduler_components/flush_wrapper.py
+@@ -21,6 +21,18 @@ class SchedulerFlushWrapper:
+         self._ipc_channels = ipc_channels
+         self._pending: Optional[Tuple[FlushCacheReqInput, float]] = None
+ 
++    def _result(self, success: bool) -> FlushCacheReqOutput:
++        scheduler = getattr(self._flush_cache, "__self__", None)
++        worker = getattr(scheduler, "tp_worker", None)
++        runner = getattr(worker, "model_runner", None)
++        publisher = getattr(
++            getattr(runner, "model", None), "aspec_feature_publisher", None
++        )
++        return FlushCacheReqOutput(
++            success=success,
++            message=publisher.transport_status_message() if publisher is not None else "",
++        )
++
+     def handle(self, recv_req: FlushCacheReqInput) -> Optional[FlushCacheReqOutput]:
+         if self._pending is not None:
+             return FlushCacheReqOutput(
+@@ -30,10 +42,10 @@ class SchedulerFlushWrapper:
+ 
+         timeout_s = float(recv_req.timeout_s or 0.0)
+         if timeout_s <= 0.0:
+-            return FlushCacheReqOutput(success=self._flush_cache())
++            return self._result(self._flush_cache())
+ 
+         if self._is_fully_idle():
+-            return FlushCacheReqOutput(success=self._flush_cache())
++            return self._result(self._flush_cache())
+ 
+         self._pending = (recv_req, time.monotonic() + timeout_s)
+         return None
+@@ -48,7 +60,7 @@ class SchedulerFlushWrapper:
+             success = self._flush_cache()
+             self._pending = None
+             self._ipc_channels.send_to_tokenizer.send_output(
+-                FlushCacheReqOutput(success=success), pending_req
++                self._result(success), pending_req
+             )
+             return
+ 
+diff --git a/python/sglang/srt/managers/scheduler_components/output_streamer.py b/python/sglang/srt/managers/scheduler_components/output_streamer.py
+index 752d456..c7c4ff9 100644
+--- a/python/sglang/srt/managers/scheduler_components/output_streamer.py
++++ b/python/sglang/srt/managers/scheduler_components/output_streamer.py
+@@ -62,6 +62,7 @@ class SchedulerOutputStreamer:
+     # Rust egress ring via `rust_server.push_generation` instead of the zmq
+     # detokenizer. None otherwise. (Rust-specific state lives in RustServer.)
+     rust_server: Optional[RustServer] = None
++    feature_publisher: Optional[Any] = None
+     _test_stream_output_count: int = 0
+ 
+     def __post_init__(self) -> None:
+@@ -143,6 +144,18 @@ class SchedulerOutputStreamer:
+             )
+ 
+     def _stream_output_generation(
++        self, reqs, return_logprob, skip_req=None, is_idle_batch=False
++    ):
++        try:
++            return self._stream_output_generation_impl(
++                reqs, return_logprob, skip_req, is_idle_batch
++            )
++        except BaseException:
++            if self.feature_publisher is not None:
++                self.feature_publisher.resolve_outputs([req.rid for req in reqs], ())
++            raise
++
++    def _stream_output_generation_impl(
+         self,
+         reqs: List[Req],
+         return_logprob: bool,
+@@ -214,6 +227,12 @@ class SchedulerOutputStreamer:
+                 self.rust_server.push_generation(payload)
+             else:
+                 self.send_to_detokenizer.send_output(payload)
++        if self.feature_publisher is not None:
++            emitted_keys = [
++                key for row in acc.customized_info.get("spec_training_mooncake_store_keys", ())
++                for key in row
++            ] if payload is not None else []
++            self.feature_publisher.resolve_outputs([req.rid for req in reqs], emitted_keys)
+ 
+     def build_additional_customized_info(self, reqs: List[Req]) -> dict[str, list]:
+         """Return fields aligned with the emitted requests in ``reqs``.
+@@ -658,6 +677,13 @@ class _GenerationStreamAccumulator:
+         current_output_len = len(self.output_ids[-1])
+         if req.customized_info is not None:
+             for key, req_values in req.customized_info.items():
++                if key == "spec_training_mooncake_store_keys":
++                    # Training output belongs to work, not generated tokens.
++                    # Prefill-only requests have zero visible output IDs.
++                    if key not in self.customized_info:
++                        self.customized_info[key] = [[] for _ in self.output_ids[:-1]]
++                    self.customized_info[key].append(list(req_values or []))
++                    continue
+                 if key not in self.customized_info:
+                     self.customized_info[key] = [
+                         [None] * len(prev_output_ids)
+diff --git a/python/sglang/srt/managers/utils.py b/python/sglang/srt/managers/utils.py
+index ed40ce3..50a1c01 100644
+--- a/python/sglang/srt/managers/utils.py
++++ b/python/sglang/srt/managers/utils.py
+@@ -255,7 +255,7 @@ def validate_input_length(
+     Returns:
+         Error message if validation fails, None if successful
+     """
+-    if len(req.origin_input_ids) >= max_req_input_len:
++    if len(req.origin_input_ids) > max_req_input_len:
+         if allow_auto_truncate:
+             logger.warning(
+                 "Request length is longer than the KV cache pool size or "
+diff --git a/python/sglang/srt/mem_cache/memory_pool.py b/python/sglang/srt/mem_cache/memory_pool.py
+index aa8a3b4..b6a6e6a 100644
+--- a/python/sglang/srt/mem_cache/memory_pool.py
++++ b/python/sglang/srt/mem_cache/memory_pool.py
+@@ -2149,6 +2149,12 @@ class MHATokenToKVPool(KVCache):
+         return not isinstance(self.quant_method, UnquantizedKVCacheMethod)
+ 
+     def _create_buffers(self):
++        if os.getenv("ASPEC_TARGET_PREFILL_MEMORY_OPTIMIZED") == "1" and (
++            self.is_quantized_kv_cache or self.post_capture_active
++        ):
++            raise RuntimeError(
++                "ASpec shared-layer prefill workspace requires ordinary unquantized KV buffers"
++            )
+         if self.is_quantized_kv_cache:
+             if self.post_capture_active:
+                 raise NotImplementedError(
+@@ -2298,6 +2304,8 @@ class MHATokenToKVPool(KVCache):
+         )
+ 
+     def _create_buffers_normal(self):
++        share_layer_workspace = os.getenv("ASPEC_TARGET_PREFILL_MEMORY_OPTIMIZED") == "1"
++        physical_layer_num = 1 if share_layer_workspace else self.layer_num
+         with self.memory_saver_adapter.region(GPU_MEMORY_TYPE_KV_CACHE):
+             with (
+                 torch.cuda.use_mem_pool(self.custom_mem_pool)
+@@ -2322,7 +2330,7 @@ class MHATokenToKVPool(KVCache):
+                             dtype=self.store_dtype,
+                             device=self.device,
+                         )
+-                        for _ in range(self.layer_num)
++                        for _ in range(physical_layer_num)
+                     ]
+                     # V: (num_blocks, H, page // X, D_v, X)
+                     self.v_buffer = [
+@@ -2337,18 +2345,21 @@ class MHATokenToKVPool(KVCache):
+                             dtype=self.store_dtype,
+                             device=self.device,
+                         )
+-                        for _ in range(self.layer_num)
++                        for _ in range(physical_layer_num)
+                     ]
+                 else:
+                     k_shape, v_shape = self._kv_buffer_shapes()
+                     self.k_buffer = [
+                         torch.zeros(k_shape, dtype=self.store_dtype, device=self.device)
+-                        for _ in range(self.layer_num)
++                        for _ in range(physical_layer_num)
+                     ]
+                     self.v_buffer = [
+                         torch.zeros(v_shape, dtype=self.store_dtype, device=self.device)
+-                        for _ in range(self.layer_num)
++                        for _ in range(physical_layer_num)
+                     ]
++        if share_layer_workspace:
++            self.k_buffer *= self.layer_num
++            self.v_buffer *= self.layer_num
+ 
+     # -- post-capture VA backing (opt-in; overridable per layout) --------------
+ 
+diff --git a/python/sglang/srt/model_executor/forward_batch_info.py b/python/sglang/srt/model_executor/forward_batch_info.py
+index ee2e5d2..ddaebd8 100644
+--- a/python/sglang/srt/model_executor/forward_batch_info.py
++++ b/python/sglang/srt/model_executor/forward_batch_info.py
+@@ -607,6 +607,7 @@ class ForwardBatch(ForwardBatchDeepSeekMHAMixin):
+     lora_ids: Optional[List[str]] = None
+     # For dumper: request IDs for cross-step sequence tracking
+     rids: Optional[List[str]] = None
++    request_custom_params: Optional[List[Optional[Dict[str, Any]]]] = None
+ 
+     # === Per-forward overrides passed explicitly to init_new ===
+     capture_hidden_mode: CaptureHiddenMode = None
+@@ -1017,6 +1018,7 @@ class ForwardBatch(ForwardBatchDeepSeekMHAMixin):
+             encoder_lens_cpu=batch.encoder_lens_cpu,
+             lora_ids=[req.lora_id for req in batch.reqs],
+             rids=[req.rid for req in batch.reqs],
++            request_custom_params=[req.sampling_params.custom_params for req in batch.reqs],
+             # Compound (carry their own device tensors)
+             sampling_info=batch.sampling_info,
+             spec_info=batch.spec_info,
+diff --git a/python/sglang/srt/model_executor/hook_manager.py b/python/sglang/srt/model_executor/hook_manager.py
+index 54f007d..5c95f43 100644
+--- a/python/sglang/srt/model_executor/hook_manager.py
++++ b/python/sglang/srt/model_executor/hook_manager.py
+@@ -6,6 +6,7 @@ from typing import Any, Callable, List, Optional
+ import torch.nn as nn
+ 
+ logger = logging.getLogger(__name__)
++SUPPORTS_MODEL_HOOK_SETUP = True
+ 
+ 
+ def register_forward_hooks(model: nn.Module, hook_specs: List[dict[str, Any]]) -> None:
+@@ -50,8 +51,11 @@ def register_forward_hooks(model: nn.Module, hook_specs: List[dict[str, Any]]) -
+             )
+             continue
+ 
++        configure = getattr(hook, "configure_model", None)
++        if callable(configure):
++            configure(model)
+         for module_name, module in matched:
+-            _ = module.register_forward_hook(hook)
++            _ = module.register_forward_hook(hook, always_call=getattr(hook, "always_call", False))
+             logger.info(f"Registered forward hook '{spec_name}' on {module_name}")
+ 
+ 
+diff --git a/python/sglang/srt/models/qwen2.py b/python/sglang/srt/models/qwen2.py
+index 588aecf..38201f2 100644
+--- a/python/sglang/srt/models/qwen2.py
++++ b/python/sglang/srt/models/qwen2.py
+@@ -405,6 +405,7 @@ class Qwen2Model(nn.Module):
+         pp_proxy_tensors: Optional[PPProxyTensors] = None,
+     ) -> Union[torch.Tensor, PPProxyTensors]:
+ 
++        direct_sink = getattr(self, "target_prefill_direct_sink", None)
+         if self.pp_group.is_first_rank:
+             if input_embeds is None:
+                 hidden_states = self.embed_tokens(input_ids)
+@@ -418,7 +419,10 @@ class Qwen2Model(nn.Module):
+         aux_hidden_states = []
+         for i in range(self.start_layer, self.end_layer):
+             if i in self.layers_to_capture:
+-                aux_hidden_states.append(snapshot(hidden_states, residual))
++                if direct_sink is None:
++                    aux_hidden_states.append(snapshot(hidden_states, residual))
++                else:
++                    direct_sink.capture(i, hidden_states, residual)
+             layer = self.layers[i]
+             hidden_states, residual = layer(
+                 positions,
+@@ -444,6 +448,10 @@ class Qwen2Model(nn.Module):
+                 else:
+                     hidden_states, _ = self.norm(hidden_states, residual)
+ 
++        if direct_sink is not None:
++            direct_sink.finish(hidden_states)
++            return hidden_states, direct_sink
++
+         if len(aux_hidden_states) == 0:
+             return hidden_states
+
+diff --git a/python/sglang/srt/models/dflash.py b/python/sglang/srt/models/dflash.py
+--- a/python/sglang/srt/models/dflash.py
++++ b/python/sglang/srt/models/dflash.py
+@@ -459,6 +459,39 @@ class DFlashMLP(nn.Module):
+         x = self.act_fn(gate_up)
+         x, _ = self.down_proj(x)
+         return x
++
++
++def _build_dflash_mlp(
++    config, layer_id: int, quant_config=None, prefix: str = ""
++) -> nn.Module:
++    """Build only explicitly declared Draft FFN structures."""
++    ffn_type = getattr(config, "ffn_type", "dense")
++    if ffn_type == "dense":
++        return DFlashMLP(config=config, quant_config=quant_config, prefix=prefix)
++    if int(get_parallel().moe_ep_size) != 1:
++        raise ValueError(
++            "DFlash MoE serving has not validated expert parallelism; "
++            "use moe_ep_size=1."
++        )
++    if ffn_type == "qwen3_moe":
++        from sglang.srt.models.qwen3_moe import Qwen3MoeSparseMoeBlock
++
++        return Qwen3MoeSparseMoeBlock(
++            layer_id=layer_id,
++            config=config,
++            quant_config=quant_config,
++            prefix=prefix,
++        )
++    if ffn_type == "ling_moe":
++        from sglang.srt.models.bailing_moe_v3 import BailingMoE
++
++        return BailingMoE(
++            config=config,
++            quant_config=quant_config,
++            layer_id=layer_id,
++            prefix=prefix,
++        )
++    raise ValueError(f"Unsupported DFlash ffn_type={ffn_type!r}.")
+
+
+ @torch.compile(dynamic=True, backend=get_compiler_backend(), disable=_is_npu)
+@@ -561,8 +594,16 @@ class DFlashDecoderLayer(nn.Module):
+         )
+         self.post_attention_layernorm = RMSNorm(hidden_size, eps=rms_norm_eps)
+         mlp_prefix = f"{prefix}.mlp" if prefix else ""
+-        self.mlp = DFlashMLP(
+-            config=config, quant_config=quant_config, prefix=mlp_prefix
++        self.ffn_type = getattr(config, "ffn_type", "dense")
++        if self.ffn_type != "dense" and mlp_conv is not None:
++            raise ValueError(
++                "DFlash MoE does not support the grouped MLP convolution."
++            )
++        self.mlp = _build_dflash_mlp(
++            config=config,
++            layer_id=layer_id,
++            quant_config=quant_config,
++            prefix=mlp_prefix,
+         )
+
+         self.attention_conv = attention_conv
+@@ -605,7 +646,10 @@ class DFlashDecoderLayer(nn.Module):
+         mlp_kernel = None
+         if self.mlp_conv is not None:
+             hidden_states, mlp_kernel = self.mlp_conv.prepare(hidden_states)
+-        hidden_states = self.mlp(hidden_states)
++        if self.ffn_type == "dense":
++            hidden_states = self.mlp(hidden_states)
++        else:
++            hidden_states = self.mlp(hidden_states, forward_batch)
+         if mlp_kernel is not None:
+             hidden_states = self.mlp_conv.finish(hidden_states, mlp_kernel)
+         return hidden_states, residual
+@@ -828,8 +872,38 @@ class DFlashDraftModel(nn.Module):
+             ("gate_up_proj", "up_proj", 1),
+         ]
+
++        ffn_type = getattr(self.config, "ffn_type", "dense")
++        expert_params_mapping = []
++        expected_moe_weights = set()
++        if ffn_type in {"qwen3_moe", "ling_moe"}:
++            from sglang.srt.layers.moe.fused_moe_triton.layer import FusedMoE
++
++            num_experts = int(self.config.num_experts)
++            expert_params_mapping = FusedMoE.make_expert_params_mapping(
++                ckpt_gate_proj_name="gate_proj",
++                ckpt_down_proj_name="down_proj",
++                ckpt_up_proj_name="up_proj",
++                num_experts=num_experts,
++            )
++            for layer_id in range(int(self.config.num_hidden_layers)):
++                prefix = f"layers.{layer_id}.mlp"
++                expected_moe_weights.add(f"{prefix}.gate.weight")
++                for expert_id in range(num_experts):
++                    for projection in ("gate_proj", "up_proj", "down_proj"):
++                        expected_moe_weights.add(
++                            f"{prefix}.experts.{expert_id}.{projection}.weight"
++                        )
++                if ffn_type == "ling_moe":
++                    expected_moe_weights.add(f"{prefix}.gate.expert_bias")
++                    if int(getattr(self.config, "num_shared_experts", 0) or 0):
++                        for projection in ("gate_proj", "up_proj", "down_proj"):
++                            expected_moe_weights.add(
++                                f"{prefix}.shared_experts.{projection}.weight"
++                            )
++
+         params_dict = dict(self.named_parameters())
+         loaded_params = set()
++        seen_moe_weights = set()
+
+         # Alias the native export's "encoder." names.
+         _VENDOR_ENCODER_ALIASES = {
+@@ -861,8 +935,35 @@ class DFlashDraftModel(nn.Module):
+                 raise ValueError(
+                     "DFLASH checkpoint contains Domino projector weights but "
+                     f"projector_type={self.projector_type!r}."
++                )
++            is_expert_weight = False
++            for param_name, weight_name, expert_id, shard_id in expert_params_mapping:
++                if weight_name not in name:
++                    continue
++                is_expert_weight = True
++                seen_moe_weights.add(unprefixed_name)
++                mapped_name = name.replace(weight_name, param_name)
++                resolved_name = resolve_param_name(mapped_name)
++                if resolved_name is None:
++                    raise ValueError(
++                        f"DFlash MoE parameter mapping did not resolve {name!r}."
++                    )
++                param = params_dict[resolved_name]
++                weight_loader = param.weight_loader
++                weight_loader(
++                    param,
++                    loaded_weight,
++                    resolved_name,
++                    shard_id=shard_id,
++                    expert_id=expert_id,
+                 )
++                loaded_params.add(resolved_name)
++                break
++            if is_expert_weight:
++                continue
+             for param_name, weight_name, shard_id in stacked_params_mapping:
++                if ".mlp.experts." in name:
++                    continue
+                 if f".{weight_name}." not in name:
+                     continue
+                 mapped_name = name.replace(weight_name, param_name)
+@@ -919,6 +1020,16 @@ class DFlashDraftModel(nn.Module):
+                 weight_loader(param, loaded_weight)
+                 loaded_params.add(resolved_name)
+
++            if unprefixed_name in expected_moe_weights:
++                seen_moe_weights.add(unprefixed_name)
++
++        missing_moe_weights = expected_moe_weights - seen_moe_weights
++        if missing_moe_weights:
++            raise ValueError(
++                "DFlash MoE checkpoint is missing required weights: "
++                f"{sorted(missing_moe_weights)}."
++            )
++
+         if self.projector_type == "domino":
+             required = {
+                 "prefix_gru.weight_ih_l0",
+diff --git a/python/sglang/srt/models/bailing_moe_v3.py b/python/sglang/srt/models/bailing_moe_v3.py
+--- a/python/sglang/srt/models/bailing_moe_v3.py
++++ b/python/sglang/srt/models/bailing_moe_v3.py
+@@ -492,13 +492,22 @@ class BailingMoE(nn.Module):
+             share_expert_swiglu_limit_list, layer_id
+         )
+
+-        # Run the MoE gate in bf16. ling-v3's config sets router_dtype="fp32",
++        # Run the Target MoE gate in bf16. ling-v3's config sets router_dtype="fp32",
+         # but on Hopper that fp32 gate GEMM falls back to a slow sm80 (Ampere)
+         # no-tensor-core path (~7% of decode GPU time). bf16 uses Hopper tensor
+         # cores; the top-k selection re-casts gating logits back to fp32
+         # (see layers/moe/topk.py), so routing stays fp32-stable. Validated on
+         # ling-v3 TP4: accuracy-neutral (greedy), ~17% bs=1 TPOT improvement.
+-        self.router_dtype = torch.bfloat16
++        # A ASpec Ling Draft is trained with an FP32 router projection and
++        # declares ffn_type=ling_moe. Preserve that training semantic at the
++        # serving boundary; ordinary Bailing Target models keep the optimized
++        # BF16 route above.
++        self.router_dtype = (
++            torch.float32
++            if getattr(config, "ffn_type", None) == "ling_moe"
++            and getattr(config, "router_dtype", None) == "fp32"
++            else torch.bfloat16
++        )
+
+         self.num_expert_group = getattr(config, "n_group", 0)
+         self.topk_group = getattr(config, "topk_group", 0)
+ 
+diff --git a/python/sglang/srt/models/qwen3.py b/python/sglang/srt/models/qwen3.py
+index 2939fc6..a34dbb3 100644
+--- a/python/sglang/srt/models/qwen3.py
++++ b/python/sglang/srt/models/qwen3.py
+@@ -465,7 +465,10 @@ class Qwen3Model(Qwen2Model):
+             hidden_states = self.layers[self.start_layer].attn_boundary.from_pp(
+                 pp_proxy_tensors, forward_batch
+             )
+-        aux_hidden_states = AuxHiddenStateList()
++        direct_sink = getattr(self, "target_prefill_direct_sink", None)
++        aux_hidden_states = (
++            direct_sink.aux_accumulator if direct_sink is not None else AuxHiddenStateList()
++        )
+         for i in range(self.start_layer, self.end_layer):
+             hidden_states = self.layers[i](
+                 positions,
+@@ -480,6 +483,9 @@ class Qwen3Model(Qwen2Model):
+         hidden_states = residual_batch.complete_output(hidden_states, forward_batch)
+         if hidden_states.shape[0] != 0:
+             hidden_states = residual_batch.norm(hidden_states, forward_batch, self.norm)
++        if direct_sink is not None:
++            direct_sink.finish(hidden_states)
++            return hidden_states, direct_sink
+         return (
+             (hidden_states, aux_hidden_states) if aux_hidden_states else hidden_states
+         )
+diff --git a/python/sglang/srt/models/qwen3_5.py b/python/sglang/srt/models/qwen3_5.py
+index fac16f3..ef8800e 100644
+--- a/python/sglang/srt/models/qwen3_5.py
++++ b/python/sglang/srt/models/qwen3_5.py
+@@ -988,6 +988,8 @@ class Qwen3_5GatedDeltaNet(nn.Module):
+             )
+             mixed_qkv = torch.cat((query, key, value), dim=-1)
+ 
++        if os.getenv("ASPEC_TARGET_PREFILL_MEMORY_OPTIMIZED") == "1":
++            del projected_states_qkvz, projected_states_ba
+         attn_result = self.attn(
+             forward_batch,
+             mixed_qkv=mixed_qkv,
+@@ -1005,6 +1007,8 @@ class Qwen3_5GatedDeltaNet(nn.Module):
+             core_attn_out = attn_result
+         assert z is not None
+ 
++        if os.getenv("ASPEC_TARGET_PREFILL_MEMORY_OPTIMIZED") == "1":
++            del mixed_qkv, a, b
+         z_shape_og = z.shape
+         # reshape input data into 2D tensor
+         core_attn_out = core_attn_out.reshape(-1, core_attn_out.shape[-1])
+@@ -1811,7 +1815,10 @@ class Qwen3_5ForCausalLM(nn.Module):
+                 pp_proxy_tensors, forward_batch
+             )
+ 
+-        aux_hidden_states = AuxHiddenStateList()
++        direct_sink = getattr(self, "target_prefill_direct_sink", None)
++        aux_hidden_states = (
++            direct_sink.aux_accumulator if direct_sink is not None else AuxHiddenStateList()
++        )
+         # Pass through decoder layers
+         for layer_idx in range(self.start_layer, self.end_layer):
+             layer = self.layers[layer_idx]
+@@ -1851,6 +1858,10 @@ class Qwen3_5ForCausalLM(nn.Module):
+             skip_empty=True,
+         )
+ 
++        if direct_sink is not None:
++            direct_sink.finish(hidden_states)
++            return hidden_states, direct_sink
++
+         if len(aux_hidden_states) == 0:
+             return hidden_states
+ 

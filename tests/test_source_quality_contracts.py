@@ -1,0 +1,232 @@
+# Copyright 2026 Ant Group Co., Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Dependency-light repository contracts enforced by public CI."""
+
+import ast
+from pathlib import Path
+
+ROOT = Path(__file__).parents[1]
+PUBLIC_TREES = (
+    ".github",
+    "configs",
+    "docs",
+    "examples",
+    "aspec",
+    "patches",
+    "requirements",
+    "tests",
+    "tools",
+)
+PUBLIC_ROOT_FILES = (
+    ".dockerignore",
+    ".gitattributes",
+    ".gitignore",
+    "AGENTS.md",
+    "CHANGELOG.md",
+    "CITATION.cff",
+    "CONTRIBUTING.md",
+    "Dockerfile",
+    "MANIFEST.in",
+    "README.md",
+    "README_zh-CN.md",
+    "ROADMAP.md",
+    "SECURITY.md",
+    "pyproject.toml",
+    "setup.sh",
+)
+TEXT_SUFFIXES = {
+    ".json",
+    ".jsonl",
+    ".md",
+    ".patch",
+    ".py",
+    ".sh",
+    ".svg",
+    ".toml",
+    ".txt",
+    ".yaml",
+    ".yml",
+}
+HYGIENE_FIXTURES = {
+    ROOT / "tests/test_open_source_entrypoints.py",
+    ROOT / "tests/test_release_audit.py",
+    Path(__file__),
+}
+
+
+def _public_text_files():
+    yield from (ROOT / name for name in PUBLIC_ROOT_FILES if (ROOT / name).is_file())
+    for tree in PUBLIC_TREES:
+        yield from (
+            path
+            for path in (ROOT / tree).rglob("*")
+            if path.is_file() and path.suffix in TEXT_SUFFIXES and path not in HYGIENE_FIXTURES
+        )
+
+
+def test_public_source_tree_excludes_historical_archive():
+    assert not (ROOT / "archive").exists()
+
+
+def test_public_source_has_no_private_environment_or_removed_archive_references():
+    markers = (
+        "archive" + "/",
+        "/personal" + "/",
+        "aistudio" + "-",
+        "code." + "alipay.com",
+        "pypi." + "antfin-inc.com",
+        "frost" + "_dev/",
+        "retained " + "internally",
+        "Megatron" + "-LM-inner",
+        "dspark" + "_for_ling_v3",
+        "10.10" + ".",
+        "10.13.2" + ".",
+    )
+    violations = []
+    for path in _public_text_files():
+        text = path.read_text(encoding="utf-8")
+        for marker in markers:
+            if marker in text:
+                violations.append(f"{path.relative_to(ROOT)}: contains {marker!r}")
+    assert not violations, "Public source hygiene violations: " + ", ".join(violations)
+
+
+def _python_runtime_asserts(tree):
+    # CuTe decorators compile the function's source AST. Their assertions are
+    # compiler constraints, not CPython runtime validation removed by python -O.
+    # Constructors and ordinary helpers still require explicit exceptions.
+    parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+    result = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assert):
+            continue
+        parent = node
+        while parent in parents:
+            parent = parents[parent]
+            if isinstance(parent, (ast.FunctionDef, ast.AsyncFunctionDef)) and any(
+                ast.unparse(decorator) in {"cute.jit", "cute.kernel"}
+                for decorator in parent.decorator_list
+            ):
+                break
+        else:
+            result.append(node)
+    return result
+
+
+def test_runtime_validation_does_not_use_optimizable_asserts():
+    violations = []
+    for path in sorted((ROOT / "aspec").rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        violations.extend(
+            f"{path.relative_to(ROOT)}:{node.lineno}"
+            for node in _python_runtime_asserts(tree)
+        )
+    assert not violations, (
+        "Production validation must use explicit exceptions because python -O removes assert: "
+        + ", ".join(violations)
+    )
+
+
+def test_cute_compile_asserts_do_not_exempt_host_validation():
+    tree = ast.parse(
+        "assert host_guard\n"
+        "@cute.jit\ndef compiled():\n    assert compile_guard\n"
+        "@cute.kernel\ndef kernel():\n    assert tile_guard\n"
+        "def host():\n    assert runtime_guard\n"
+    )
+    assert [ast.unparse(node.test) for node in _python_runtime_asserts(tree)] == [
+        "host_guard", "runtime_guard"
+    ]
+
+
+def test_runtime_remote_code_policy_never_defaults_to_trusted():
+    violations = []
+    for path in sorted((ROOT / "aspec").rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                for keyword in node.keywords:
+                    if (
+                        keyword.arg == "trust_remote_code"
+                        and isinstance(keyword.value, ast.Constant)
+                        and keyword.value.value is True
+                    ):
+                        violations.append(f"{path.relative_to(ROOT)}:{node.lineno}")
+                if (
+                    isinstance(node.func, ast.Name)
+                    and node.func.id == "getattr"
+                    and len(node.args) >= 3
+                    and isinstance(node.args[1], ast.Constant)
+                    and node.args[1].value == "trust_remote_code"
+                    and isinstance(node.args[2], ast.Constant)
+                    and node.args[2].value is True
+                ):
+                    violations.append(f"{path.relative_to(ROOT)}:{node.lineno}")
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                positional = [*node.args.posonlyargs, *node.args.args]
+                positional_defaults = [None] * (
+                    len(positional) - len(node.args.defaults)
+                ) + list(node.args.defaults)
+                defaults = dict(
+                    zip(
+                        [arg.arg for arg in positional],
+                        positional_defaults,
+                        strict=True,
+                    )
+                )
+                defaults.update(
+                    zip(
+                        [arg.arg for arg in node.args.kwonlyargs],
+                        node.args.kw_defaults,
+                        strict=True,
+                    )
+                )
+                default = defaults.get("trust_remote_code")
+                if isinstance(default, ast.Constant) and default.value is True:
+                    violations.append(f"{path.relative_to(ROOT)}:{node.lineno}")
+    assert not violations, (
+        "Production trust_remote_code policy must default to false: "
+        + ", ".join(sorted(set(violations)))
+    )
+
+
+def test_current_sglang_patch_has_registered_provenance():
+    references = (ROOT / "docs/framework/REFERENCES.md").read_text(encoding="utf-8")
+    patch = ROOT / "aspec/compat/patches/sglang-v0.5.21.patch"
+    assert patch.is_file()
+    assert "e00930c5489053f26d86b179cee0d087f846acbb" in patch.read_text(
+        encoding="utf-8"
+    ).splitlines()[0]
+    assert "`aspec/compat/patches/sglang-v0.5.21.patch`" in references
+    assert "SGLang v0.5.21" in references
+    assert (ROOT / "licenses/SGLang-LICENSE").is_file()
+
+
+def test_public_ci_runs_pytest():
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    assert "python -m pytest" in workflow
+
+
+def test_eagle4_validation_gates_do_not_use_optimizable_asserts():
+    for name in ("eagle4_upstream.py", "eagle4_asset.py", "eagle4_candidate_state.py"):
+        path = ROOT / "tools" / "validation" / name
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        assert not any(isinstance(node, ast.Assert) for node in ast.walk(tree)), name
+
+
+def test_public_ci_includes_eagle4_cpu_contracts():
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    for name in ("test_eagle4.py", "test_eagle4_moe.py", "test_eagle4_validation.py"):
+        assert f"tests/{name}" in workflow

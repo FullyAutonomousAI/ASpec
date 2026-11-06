@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="500" viewBox="0 0 1120 500" role="img" aria-labelledby="title desc">
+<title id="title">DSpark Training Throughput</title><desc id="desc">Two side-by-side vertical bar charts for Qwen3-8B / 4K. Left: single-GPU Draft-only. Right: eight-GPU online steady state. Independent zero-based scales.</desc><metadata>{&quot;source&quot;:&quot;docs/benchmarks/results.md&quot;,&quot;workload&quot;:&quot;Qwen3-8B / 4K&quot;,&quot;architecture&quot;:&quot;Hopper&quot;,&quot;metric&quot;:&quot;committed training input tokens per second&quot;,&quot;layout&quot;:&quot;two side-by-side vertical column charts; independent zero-based vertical scales&quot;,&quot;frameworks&quot;:[&quot;TorchSpec&quot;,&quot;SpecForge&quot;,&quot;AngelSpec&quot;,&quot;ASpec&quot;],&quot;panels&quot;:[{&quot;position&quot;:&quot;left&quot;,&quot;gpu_count&quot;:1,&quot;boundary&quot;:&quot;resident Draft forward/backward/optimizer; excludes Target and transport&quot;,&quot;values&quot;:[7774.31,7370.28,6155.94,15256.44]},{&quot;position&quot;:&quot;right&quot;,&quot;gpu_count&quot;:8,&quot;boundary&quot;:&quot;online steady window after completion of warmup update eight through final optimizer completion&quot;,&quot;values&quot;:[34080.95,31063.56,28952.97,77721.37]}]}</metadata>
+<defs>
+<linearGradient id="blue" x2="0.7" y2="1"><stop stop-color="#EFF7FF"/><stop offset="1" stop-color="#CAE0FF"/></linearGradient>
+<linearGradient id="mint" x2="0.8" y2="1"><stop stop-color="#E2FAF5"/><stop offset="1" stop-color="#BFF1D9"/></linearGradient>
+<linearGradient id="orange" x2="0" y2="1"><stop stop-color="#FFF7D9"/><stop offset="1" stop-color="#FFE4A6"/></linearGradient>
+<linearGradient id="purple" x2="0" y2="1"><stop stop-color="#F8EDFF"/><stop offset="1" stop-color="#E7CEFF"/></linearGradient>
+</defs>
+<style>text{font-family:Arial,Helvetica,sans-serif;font-variant-numeric:tabular-nums}</style>
+<rect width="1120" height="500" fill="#FFFFFF"/>
+<text x="560" y="37" font-size="32" font-weight="400" fill="#111111" text-anchor="middle">DSpark Training Throughput</text>
+<text x="560" y="65" font-size="18" font-weight="400" fill="#111111" text-anchor="middle">Qwen3-8B / 4K · Hopper GPUs · input tokens/s</text>
+<rect x="20" y="88" width="528" height="352" rx="7" fill="#FFFFFF" stroke="#458AFF" />
+<rect x="21" y="89" width="526" height="48" rx="7" fill="url(#mint)" stroke="none" />
+<circle cx="50" cy="113" r="15" fill="#00AA91"/>
+<text x="50" y="119" font-size="19" font-weight="700" fill="#FFFFFF" text-anchor="middle">1</text>
+<text x="76" y="120" font-size="21" font-weight="400" fill="#111111" text-anchor="start">Draft-only · 1 GPU</text>
+<text x="40" y="160" font-size="14" font-weight="400" fill="#111111" text-anchor="start">Target features preloaded on GPU</text>
+<path d="M80 390H528" fill="none" stroke="#555555" stroke-width="1"/>
+<text x="68" y="394" font-size="12" font-weight="400" fill="#111111" text-anchor="end">0</text>
+<path d="M80 295H528" fill="none" stroke="#DEDEDE" stroke-width="1"/>
+<text x="68" y="299" font-size="12" font-weight="400" fill="#111111" text-anchor="end">8k</text>
+<path d="M80 200H528" fill="none" stroke="#DEDEDE" stroke-width="1"/>
+<text x="68" y="204" font-size="12" font-weight="400" fill="#111111" text-anchor="end">16k</text>
+<rect x="110" y="297.68006875" width="60" height="92.31993125000001" rx="3" fill="url(#blue)" stroke="#286FEA" data-value="7774.31"/>
+<text x="140" y="287.68006875" font-size="14" font-weight="400" fill="#111111" text-anchor="middle">7,774.31</text>
+<text x="140" y="418" font-size="15" font-weight="400" fill="#111111" text-anchor="middle">TorchSpec</text>
+<rect x="220" y="302.477925" width="60" height="87.522075" rx="3" fill="url(#blue)" stroke="#286FEA" data-value="7370.28"/>
+<text x="250" y="292.477925" font-size="14" font-weight="400" fill="#111111" text-anchor="middle">7,370.28</text>
+<text x="250" y="418" font-size="15" font-weight="400" fill="#111111" text-anchor="middle">SpecForge</text>
+<rect x="330" y="316.8982125" width="60" height="73.10178749999999" rx="3" fill="url(#blue)" stroke="#286FEA" data-value="6155.94"/>
+<text x="360" y="306.8982125" font-size="14" font-weight="400" fill="#111111" text-anchor="middle">6,155.94</text>
+<text x="360" y="418" font-size="15" font-weight="400" fill="#111111" text-anchor="middle">AngelSpec</text>
+<rect x="440" y="208.82977499999998" width="60" height="181.17022500000002" rx="3" fill="url(#mint)" stroke="#00AA91" data-value="15256.44"/>
+<text x="470" y="198.82977499999998" font-size="14" font-weight="700" fill="#111111" text-anchor="middle">15,256.44</text>
+<text x="470" y="418" font-size="15" font-weight="700" fill="#111111" text-anchor="middle">ASpec</text>
+<rect x="572" y="88" width="528" height="352" rx="7" fill="#FFFFFF" stroke="#458AFF" />
+<rect x="573" y="89" width="526" height="48" rx="7" fill="url(#mint)" stroke="none" />
+<circle cx="602" cy="113" r="15" fill="#00AA91"/>
+<text x="602" y="119" font-size="19" font-weight="700" fill="#FFFFFF" text-anchor="middle">2</text>
+<text x="628" y="120" font-size="21" font-weight="400" fill="#111111" text-anchor="start">Online steady state · 8 GPUs</text>
+<text x="592" y="160" font-size="14" font-weight="400" fill="#111111" text-anchor="start">Target generation, transfer and Draft updates</text>
+<path d="M632 390H1080" fill="none" stroke="#555555" stroke-width="1"/>
+<text x="620" y="394" font-size="12" font-weight="400" fill="#111111" text-anchor="end">0</text>
+<path d="M632 295H1080" fill="none" stroke="#DEDEDE" stroke-width="1"/>
+<text x="620" y="299" font-size="12" font-weight="400" fill="#111111" text-anchor="end">40k</text>
+<path d="M632 200H1080" fill="none" stroke="#DEDEDE" stroke-width="1"/>
+<text x="620" y="204" font-size="12" font-weight="400" fill="#111111" text-anchor="end">80k</text>
+<rect x="662" y="309.05774375" width="60" height="80.94225624999999" rx="3" fill="url(#blue)" stroke="#286FEA" data-value="34080.95"/>
+<text x="692" y="299.05774375" font-size="14" font-weight="400" fill="#111111" text-anchor="middle">34,080.95</text>
+<text x="692" y="418" font-size="15" font-weight="400" fill="#111111" text-anchor="middle">TorchSpec</text>
+<rect x="772" y="316.224045" width="60" height="73.77595500000001" rx="3" fill="url(#blue)" stroke="#286FEA" data-value="31063.56"/>
+<text x="802" y="306.224045" font-size="14" font-weight="400" fill="#111111" text-anchor="middle">31,063.56</text>
+<text x="802" y="418" font-size="15" font-weight="400" fill="#111111" text-anchor="middle">SpecForge</text>
+<rect x="882" y="321.23669625" width="60" height="68.76330374999999" rx="3" fill="url(#blue)" stroke="#286FEA" data-value="28952.97"/>
+<text x="912" y="311.23669625" font-size="14" font-weight="400" fill="#111111" text-anchor="middle">28,952.97</text>
+<text x="912" y="418" font-size="15" font-weight="400" fill="#111111" text-anchor="middle">AngelSpec</text>
+<rect x="992" y="205.41174625000002" width="60" height="184.58825374999998" rx="3" fill="url(#mint)" stroke="#00AA91" data-value="77721.37"/>
+<text x="1022" y="195.41174625000002" font-size="14" font-weight="700" fill="#111111" text-anchor="middle">77,721.37</text>
+<text x="1022" y="418" font-size="15" font-weight="700" fill="#111111" text-anchor="middle">ASpec</text>
+<text x="560" y="472" font-size="14" font-weight="400" fill="#111111" text-anchor="middle">Independent zero-based axes. Measurement scopes and full conditions are given in the article appendix.</text>
+</svg>

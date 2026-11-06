@@ -1,0 +1,21 @@
+name: Bug report
+description: A reproducible installation, training, recovery or export problem
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Command, redacted config, input shape and original error. Do not paste secrets, auth files, weights or private data.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment and evidence
+      description: Revision/dirty state, install command, doctor output, GPU/driver and relevant Plan/Evidence fields. CPU-only or skipped checks are useful to identify too.

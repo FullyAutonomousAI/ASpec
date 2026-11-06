@@ -1,0 +1,75 @@
+[build-system]
+requires = ["setuptools>=77.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aspec"
+version = "0.1.0rc1"
+description = "A Torch-native framework for speculative decoding training"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "licenses/*"]
+requires-python = ">=3.11"
+dependencies = [
+    "accelerate",
+    "cmake",
+    "datasets>=5.0.1,<6",
+    "mooncake-transfer-engine>=0.3.10.post1",
+    "ninja",
+    "numba",
+    "numpy<2.4",
+    "omegaconf",
+    "openai",
+    "openai-harmony",
+    "packaging",
+    "psutil",
+    "pydantic",
+    "pyzmq",
+    "qwen-vl-utils",
+    "ray",
+    "setuptools",
+    "tqdm",
+    "transformers",
+    "wandb>=0.19.10",
+]
+
+[project.scripts]
+aspec = "aspec.cli:main"
+
+[project.optional-dependencies]
+dev = ["build", "pre-commit", "pytest", "ruff", "tensorboard"]
+tracking = ["tensorboard"]
+fa = [
+    # b34 is compatible with SGLang v0.5.21's TVM-FFI 0.1.11 pin.
+    "flash-attn-4==4.0.0b34",
+    "nvidia-cutlass-dsl[cu13]==4.7.1",
+    "quack-kernels[cu13]==0.6.5",
+]
+dspark-qk = [
+    # The ASpec-owned kernel uses cutlass.experimental on CUDA 13.
+    "nvidia-cutlass-dsl[cu13]==4.7.1",
+]
+
+[tool.setuptools.packages.find]
+include = ["aspec*"]
+
+[tool.setuptools.package-data]
+aspec = ["_build_info.json", "config/*.json", "compat/patches/*.patch", "kernels/cutedsl/cudnn_gqa/*.md", "kernels/cutedsl/cudnn_gqa/*.json"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "TID252"]
+ignore = ["E501"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.isort]
+known-first-party = ["aspec"]
+known-third-party = ["wandb"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

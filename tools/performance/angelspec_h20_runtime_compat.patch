@@ -1,0 +1,24 @@
+diff --git a/angelspec/models/draft/llama3_eagle.py b/angelspec/models/draft/llama3_eagle.py
+--- a/angelspec/models/draft/llama3_eagle.py
++++ b/angelspec/models/draft/llama3_eagle.py
+@@ -43,9 +43,17 @@ try:
+     import importlib  # noqa: E401
+     import importlib.util
+ 
+-    if importlib.util.find_spec("cutlass.utils") and not importlib.util.find_spec(
+-        "cutlass.utils.ampere_helpers"
+-    ):
++    def _module_spec_available(name: str) -> bool:
++        try:
++            return importlib.util.find_spec(name) is not None
++        except (ImportError, ValueError):
++            # Some SGLang/CUTLASS loaders pre-register namespace shims with
++            # ``__spec__ = None``. Treat those exactly like an absent module.
++            return False
++
++    if _module_spec_available("cutlass.utils") and not _module_spec_available(
++        "cutlass.utils.ampere_helpers"
++    ):
+         import types  # noqa: E401
+ 
+         import cutlass.utils

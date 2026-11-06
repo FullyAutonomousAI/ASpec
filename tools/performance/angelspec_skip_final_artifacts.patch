@@ -1,0 +1,25 @@
+diff --git a/angelspec/controller/loop.py b/angelspec/controller/loop.py
+--- a/angelspec/controller/loop.py
++++ b/angelspec/controller/loop.py
+@@ -468,8 +468,12 @@ def training_loop(
+     if final_online_metrics and wandb.run is not None:
+         wandb.log({k: v for k, v in final_online_metrics.items() if isinstance(v, (int, float))})
+ 
++    skip_final_artifacts = os.getenv("ANGELSPEC_SKIP_FINAL_ARTIFACTS") == "1"
++    if skip_final_artifacts:
++        logger.info("Skipping final checkpoint and HF export for benchmark run")
++
+     # Always save a final checkpoint unless saved.
+-    if args.checkpoint_dir and last_saved_step != completed_steps:
++    if not skip_final_artifacts and args.checkpoint_dir and last_saved_step != completed_steps:
+         eval_metrics = run_eval(completed_steps, train_group, eval_enabled)
+         logger.info(f"Saving final checkpoint at step {completed_steps}...")
+         train_group.save_model(completed_steps, force_sync=True)
+@@ -484,6 +488,6 @@ def training_loop(
+     # Eagle3 runs finish with no directly servable weights. config.save_pretrained
+     # carries model_arch (e.g. "dflare"), so the export round-trips correctly.
+-    if getattr(args, "output_dir", None):
++    if not skip_final_artifacts and getattr(args, "output_dir", None):
+         hf_dir = os.path.join(args.output_dir, "hf_final")
+         try:
+             logger.info(f"Exporting final draft model (HF format) to {hf_dir}...")

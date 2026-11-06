@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use ASpec in your work, please cite it using this metadata."
+title: "ASpec: A High-Throughput Training Framework for Speculative Decoding"
+authors:
+  - family-names: "Zhou"
+    given-names: "Aihui"
+  - family-names: "Long"
+    given-names: "Lingkun"
+  - family-names: "Yu"
+    given-names: "Chaofan"
+  - family-names: "Yang"
+    given-names: "Zhe"
+  - family-names: "Peng"
+    given-names: "Cunyin"
+  - family-names: "Zhang"
+    given-names: "Zhiqiang"
+  - family-names: "Zhou"
+    given-names: "Jun"
+url: "https://github.com/inclusionAI/ASpec"
+date-released: 2026-11-05
+version: "0.1.0rc1"
+license: Apache-2.0

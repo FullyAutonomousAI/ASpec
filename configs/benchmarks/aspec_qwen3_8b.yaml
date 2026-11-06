@@ -1,0 +1,95 @@
+# Native Qwen3-8B DSpark comparison; actual supervised work is counted.
+model:
+  target_model_path: ${oc.env:BENCH_TARGET_MODEL}
+  trust_remote_code: true
+  initial_draft_model_path: ${oc.env:BENCH_INITIAL_DRAFT}
+  draft_model_config: aspec/config/dspark_draft_config.json
+  native_context_length: 32768
+dataset:
+  train_data_path: ${oc.env:BENCH_TRAIN_DATA}
+  chat_template: null
+  eval_data_path: null
+  min_loss_tokens: 32
+  last_turn_loss_only: false
+  shuffle_dataset: false
+training:
+  learning_rate: 0.0006
+  min_lr: 6.0e-05
+  weight_decay: 0
+  max_grad_norm: 1
+  fsdp_strategy: REPLICATE
+  fsdp_reduce_dtype: bfloat16
+  training_num_gpus_per_node: 4
+  training_num_nodes: 1
+  num_train_steps: 128
+  num_epochs: 100
+  lr_total_steps: 1000
+  warmup_ratio: 0.04
+  max_seq_length: 4096
+  prefetch_depth: 1
+  max_concurrent_batches: 1
+  seed: 42
+  compile_model: false
+  save_interval: 0
+  save_per_epoch: false
+  save_final_checkpoint: false
+  dflash_block_size: 7
+  dspark_num_anchors: 512
+  dspark_num_target_layers: 5
+  dspark_loss_decay_gamma: 4
+  dspark_ce_loss_alpha: 0.1
+  dspark_l1_loss_alpha: 0.9
+  dspark_confidence_head_alpha: 1
+  attention_backend: cudnn_flex_attention
+  micro_batch_size: 1
+  draft_accumulation_steps: 2
+  draft_context_parallel_size: 1
+  dflash_packing: true
+  packing_min_samples_per_dispatch: 32
+  streaming_dispatch_with_training: true
+  pipeline_dispatch_with_training: true
+inference:
+  inference_engine_type: sgl
+  store_last_hidden_states: true
+  inference_num_gpus: 4
+  inference_num_gpus_per_engine: 1
+  inference_num_gpus_per_node: 4
+  inference_batch_size: 8
+  inference_buffer_threshold: 32
+  max_sample_pool_size: 64
+  sglang:
+    tp_size: 1
+    mem_fraction_static: 0.5
+  target_prefill_memory_optimized: true
+mooncake:
+  protocol: nvlink_intra
+  enable_gpu_direct: true
+  enable_hard_pin: true
+  global_segment_size: 16GB
+  host_buffer_size: 4GB
+  local_buffer_size: 4GB
+  # One slot owns one request.  A 4K DSpark request is about 192 MiB
+  # (five auxiliary layers plus the final hidden state), so 512 MiB keeps
+  # useful headroom without multiplying a multi-GiB allocation by the ring.
+  gpu_buffer_size: 512MB
+  max_seq_len: 4096
+  hidden_dim: 4096
+  kv_lease_ttl_s: 600
+  get_retry_max_wait_seconds: 600
+  data_plane: transfer_engine
+  require_nvlink: true
+  allow_host_fallback: false
+  # Keep each engine's share of the 64-sample ready pool resident until Draft
+  # ownership releases it.
+  source_gpu_ring_slots: 16
+  destination_gpu_ring_slots: 1
+  gpu_ring_slots: 16
+logging:
+  report_to: none
+debug:
+  enable_perf_metrics: true
+  performance_measurement_required: true
+  performance_warmup_steps: 8
+  performance_drain_steps: 0
+output_dir: ${oc.env:BENCH_OUTPUT}
+cache_dir: ${oc.env:BENCH_CACHE}

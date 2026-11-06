@@ -1,0 +1,86 @@
+# Latest SpecForge main, native 128K DSpark: six TP1 capture servers + DP2 Draft.
+# Override model/data/checkpoint/output paths for the benchmark host.
+model:
+  target_model_path: Qwen/Qwen3-8B
+  draft_model_config: configs/qwen3-8b-dspark.json
+  draft_checkpoint_path: /path/to/common-initial-draft
+  target_backend: sglang
+  trust_remote_code: true
+  torch_dtype: bfloat16
+  sglang_mem_fraction_static: 0.5
+  sglang_context_length: 131079
+  sglang_max_running_requests: 1
+  sglang_max_total_tokens: 131328
+  sglang_max_prefill_tokens: 131328
+  sglang_extra_args:
+    - --json-model-override-args
+    - '{"rope_scaling":{"rope_type":"yarn","factor":4.0,"original_max_position_embeddings":32768,"rope_theta":1000000.0},"max_position_embeddings":131072}'
+data:
+  prompts_path: /path/to/specforge-128k-prompts.jsonl
+  max_length: 131072
+  chat_template: qwen
+training:
+  strategy: dspark
+  num_epochs: 1
+  max_steps: 256
+  batch_size: 1
+  accumulation_steps: 2
+  fsdp_sharding: NO_SHARD
+  learning_rate: 0.0006
+  warmup_ratio: 0.04
+  max_grad_norm: 1.0
+  attention_backend: flex_attention
+  num_anchors: 512
+  loss_decay_gamma: 4.0
+  objective_chunk_blocks: 128
+  save_interval: 0
+  log_interval: 1
+  dist_timeout: 300
+  seed: 42
+tracking:
+  report_to: none
+runtime:
+  producer_lease: 6
+  producer_concurrency: 1
+  in_flight_high_watermark: 16
+  in_flight_low_watermark: 8
+  # Six 16 GiB Target-side capture arenas provide 96 GiB in aggregate.
+  resident_high_watermark_bytes: 103079215104
+  resident_low_watermark_bytes: 51539607552
+  feature_store_max_resident_bytes: 103079215104
+run_id: specforge-qwen3-8b-dspark-128k
+output_dir: /path/to/specforge-128k-output
+deployment:
+  mode: disaggregated
+  trainer:
+    nnodes: 1
+    nproc_per_node: 2
+  disaggregated:
+    # managed_local processes concurrently update this directory; keep it on
+    # node-local storage rather than NFS or another distributed filesystem.
+    control_dir: /tmp/specforge-qwen3-8b-dspark-128k-control
+    backend: mooncake
+    # Upstream main's documented v0.5.18 path uses its versioned capture patch.
+    server_capture: patch
+    client_buffer_size: 8589934592
+    receive_buffers: cuda
+    # The largest observed feature is below 6 GiB.  The upstream 8 GiB default
+    # preserves full-object reads without crowding 128K training activations.
+    receive_pool_bytes: 8589934592
+    managed_local:
+      trainer_cuda_visible_devices: ["6", "7"]
+      mooncake:
+        rpc_port: 36551
+        metadata_port: 36880
+        metrics_port: 36903
+        protocol: nvlink
+        global_segment_size_bytes: 1073741824
+        arena_bytes: 17179869184
+        local_buffer_size_bytes: 1073741824
+      capture_servers:
+        - {port: 31000, cuda_visible_devices: ["0"], tp_size: 1, mem_fraction_static: 0.5, gpu_put: true, env: {SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN: "1"}}
+        - {port: 31001, cuda_visible_devices: ["1"], tp_size: 1, mem_fraction_static: 0.5, gpu_put: true, env: {SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN: "1"}}
+        - {port: 31002, cuda_visible_devices: ["2"], tp_size: 1, mem_fraction_static: 0.5, gpu_put: true, env: {SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN: "1"}}
+        - {port: 31003, cuda_visible_devices: ["3"], tp_size: 1, mem_fraction_static: 0.5, gpu_put: true, env: {SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN: "1"}}
+        - {port: 31004, cuda_visible_devices: ["4"], tp_size: 1, mem_fraction_static: 0.5, gpu_put: true, env: {SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN: "1"}}
+        - {port: 31005, cuda_visible_devices: ["5"], tp_size: 1, mem_fraction_static: 0.5, gpu_put: true, env: {SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN: "1"}}

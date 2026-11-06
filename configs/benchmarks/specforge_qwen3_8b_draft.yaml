@@ -1,0 +1,42 @@
+# Latest SpecForge main DSpark resident-feature Draft-only control.
+model:
+  target_model_path: /path/to/Qwen3-8B
+  draft_model_config: configs/qwen3-8b-dspark.json
+  draft_checkpoint_path: /path/to/common-initial-draft
+  target_backend: sglang
+  trust_remote_code: true
+  torch_dtype: bfloat16
+data:
+  # The benchmark runner supplies a resident store; this required typed field
+  # records the source feature manifest rather than entering the timed path.
+  hidden_states_path: /path/to/shared-target-features
+  max_length: 4096
+  chat_template: qwen
+  dataloader_num_workers: 0
+training:
+  strategy: dspark
+  num_epochs: 1
+  max_steps: 128
+  batch_size: 1
+  accumulation_steps: 2
+  fsdp_sharding: NO_SHARD
+  learning_rate: 0.0006
+  warmup_ratio: 0.04
+  max_grad_norm: 1.0
+  attention_backend: flex_attention
+  num_anchors: 512
+  loss_decay_gamma: 4.0
+  objective_chunk_blocks: 128
+  save_interval: 0
+  log_interval: 1
+  dist_timeout: 300
+  seed: 42
+tracking:
+  report_to: none
+run_id: specforge-qwen3-8b-draft
+output_dir: /path/to/specforge-draft-output
+deployment:
+  mode: local_colocated
+  trainer:
+    nnodes: 1
+    nproc_per_node: 1

@@ -1,0 +1,121 @@
+# Copyright (c) 2026 LightSeek Foundation
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+import json
+
+from transformers import AutoModelForCausalLM as AutoModelForCausalLMBase
+from transformers import LlamaConfig, PretrainedConfig
+from transformers.models.deepseek_v3.configuration_deepseek_v3 import DeepseekV3Config
+
+from aspec.config.eagle4 import Eagle4Config
+from aspec.models.draft.deepseek_eagle import Eagle3DeepseekV2ForCausalLM
+from aspec.models.draft.dflash import DFlashConfig, DFlashDraftModel
+from aspec.models.draft.dflash2 import DFlash2Config, DFlash2DraftModel
+from aspec.models.draft.dspark import (
+    DSparkConfig,
+    DSparkDraftModel,
+    K3DSparkConfig,
+    K3DSparkModel,
+)
+from aspec.models.draft.eagle4 import Eagle4DraftModel
+from aspec.models.draft.llama3_eagle import LlamaForCausalLMEagle3
+from aspec.models.draft.mtp import NativeMTPConfig, NativeMTPDraftModel
+from aspec.utils.logging import logger
+
+
+class AutoEagle3DraftModel(AutoModelForCausalLMBase):
+    _model_mapping = {
+        LlamaConfig: LlamaForCausalLMEagle3,
+        Eagle4Config: Eagle4DraftModel,
+        DeepseekV3Config: Eagle3DeepseekV2ForCausalLM,
+        NativeMTPConfig: NativeMTPDraftModel,
+        DFlashConfig: DFlashDraftModel,
+        DFlash2Config: DFlash2DraftModel,
+        DSparkConfig: DSparkDraftModel,
+        K3DSparkConfig: K3DSparkModel,
+    }
+
+    @classmethod
+    def from_config(cls, config: PretrainedConfig, torch_dtype=None, **config_kwargs):
+        _model_cls = cls._model_mapping[type(config)]
+        model = _model_cls(config, **config_kwargs)
+
+        if torch_dtype is not None:
+            model = model.to(dtype=torch_dtype)
+        return model
+
+
+class AutoDraftModelConfig:
+    _config_mapping = {
+        "LlamaForCausalLMEagle3": LlamaConfig,
+        "LlamaForCausalLMEagle4": Eagle4Config,
+        "Eagle3DeepseekV2ForCausalLM": DeepseekV3Config,
+        "NativeMTPDraftModel": NativeMTPConfig,
+        "DFlashDraftModel": DFlashConfig,
+        "DFlash2DraftModel": DFlash2Config,
+        "Qwen3DSparkModel": DSparkConfig,
+        "DSparkDraftModel": DSparkConfig,
+        "K3DSparkModel": K3DSparkConfig,
+    }
+
+    @classmethod
+    def from_dict(cls, config: dict):
+        config = dict(config)
+
+        if "tie_word_embeddings" in config:
+            logger.info("Set draft model tie_word_embeddings to False")
+            config["tie_word_embeddings"] = False
+
+        architectures = config.get("architectures", None)
+
+        if architectures is None:
+            raise ValueError("No architectures found in the config file")
+
+        if len(architectures) != 1:
+            raise ValueError("Only one architecture is supported")
+
+        architecture = architectures[0]
+        if architecture == "Eagle3DeepseekV2ForCausalLM":
+            config.setdefault("pretraining_tp", 1)
+            # This retained architecture implements Dense LlamaMLP. Do not let
+            # DeepseekV3Config's unrelated native MoE defaults describe it.
+            for key in ("n_routed_experts", "n_shared_experts", "num_experts_per_tok"):
+                config.setdefault(key, 0)
+            config.setdefault("moe_intermediate_size", 0)
+            config.setdefault("num_key_value_heads", config["num_attention_heads"])
+        if architecture in {"LlamaForCausalLMEagle3", "LlamaForCausalLMEagle4", "Eagle3DeepseekV2ForCausalLM"} and config.get("target_layer_ids"):
+            config.setdefault("num_aux_hidden_states", len(config["target_layer_ids"]))
+
+        if architecture not in cls._config_mapping:
+            raise ValueError(f"Architecture {architecture} not supported")
+
+        if architecture == "NativeMTPDraftModel":
+            return NativeMTPConfig.from_dict(config)
+
+        if "draft_vocab_size" not in config or config["draft_vocab_size"] is None:
+            config["draft_vocab_size"] = config.get("vocab_size", None)
+
+        return cls._config_mapping[architecture].from_dict(config)
+
+    @classmethod
+    def from_file(cls, config_path: str):
+        with open(config_path, "r") as f:
+            config = json.load(f)
+        return cls.from_dict(config)

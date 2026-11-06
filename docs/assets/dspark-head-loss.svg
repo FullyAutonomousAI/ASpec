@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="600" viewBox="0 0 1120 600" role="img" aria-labelledby="title desc">
+<title id="title">DSpark LM Head and L1 Loss: Reuse Logits, Rebuild Softmax Tiles</title>
+<desc id="desc">Left: repeated Target projections versus budgeted full-context logits reuse. Right: tiled L1 over the full vocabulary and backward softmax reconstruction. Eight FP32 scalars per prediction position cover replay statistics only, excluding logits and temporary workspace.</desc>
+<metadata>{&quot;scope&quot;:&quot;Conceptual diagram, not measured memory sizes or throughput.&quot;,&quot;sources&quot;:[&quot;aspec/models/dspark.py&quot;,&quot;aspec/models/ops/tiled_l1.py&quot;],&quot;projection_reuse&quot;:&quot;Full-context frozen Target projection shown; CP1, bounded budget and lower projection work required. Budgeted chunk caching may retain Target and Draft logits. All reuse is within one forward/backward.&quot;,&quot;loss&quot;:&quot;Tiled L1 with full-vocabulary FP32 normalization; reconstruct softmax tiles from logits and statistics during backward.&quot;,&quot;replay_statistics&quot;:&quot;8 FP32 scalars per prediction row (4 normalization, 3 sign-group masses, 1 loss); excludes logits and temporary workspace.&quot;}</metadata>
+<defs>
+<linearGradient id="blue" x2="0.7" y2="1"><stop stop-color="#EFF7FF"/><stop offset="1" stop-color="#CAE0FF"/></linearGradient>
+<linearGradient id="mint" x2="0.8" y2="1"><stop stop-color="#E2FAF5"/><stop offset="1" stop-color="#BFF1D9"/></linearGradient>
+<linearGradient id="orange" x2="0" y2="1"><stop stop-color="#FFF7D9"/><stop offset="1" stop-color="#FFE4A6"/></linearGradient>
+<linearGradient id="purple" x2="0" y2="1"><stop stop-color="#F8EDFF"/><stop offset="1" stop-color="#E7CEFF"/></linearGradient>
+
+  <marker id="arrow-gray" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#111111"/></marker>
+  <marker id="arrow-blue" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#111111"/></marker>
+</defs>
+<style>text{font-family:Arial,Helvetica,sans-serif;font-variant-numeric:tabular-nums}</style>
+<rect x="0" y="0" width="1120" height="600" rx="0" fill="#FFFFFF" stroke="none" />
+<text x="560" y="36" font-size="32" fill="#111111" text-anchor="middle">DSpark Training: LM Head and Loss</text>
+<text x="560" y="62" font-size="17" fill="#111111" text-anchor="middle">Reuse budgeted logits. Rebuild softmax tiles when needed.</text>
+<rect x="20" y="80" width="528" height="500" rx="6" fill="#FFFFFF" stroke="#6AA0EC" />
+<rect x="568" y="80" width="532" height="500" rx="6" fill="#FFFFFF" stroke="#6AA0EC" />
+<rect x="21" y="81" width="526" height="48" rx="7" fill="url(#mint)" stroke="none" />
+<circle cx="50" cy="105" r="15" fill="#00AA91"/>
+<text x="50" y="111" font-size="19" font-weight="700" fill="#FFFFFF" text-anchor="middle">1</text>
+<text x="76" y="112" font-size="21" font-weight="400" fill="#111111" text-anchor="start">Reuse LM Head projections</text>
+<rect x="569" y="81" width="530" height="48" rx="7" fill="url(#mint)" stroke="none" />
+<circle cx="598" cy="105" r="15" fill="#00AA91"/>
+<text x="598" y="111" font-size="19" font-weight="700" fill="#FFFFFF" text-anchor="middle">2</text>
+<text x="624" y="112" font-size="21" font-weight="400" fill="#111111" text-anchor="start">Tile the L1 loss</text>
+<text x="40" y="145" font-size="14" fill="#333333" font-weight="400" text-anchor="start">Two prediction blocks use the same Target position</text>
+<rect x="40" y="196" width="100" height="54" rx="6" fill="url(#blue)" stroke="#6AA0EC" />
+<text x="90" y="218" font-size="15" fill="#111111" font-weight="400" text-anchor="middle">Target h[t]</text>
+<text x="90" y="238" font-size="12" fill="#333333" font-weight="400" text-anchor="middle">Frozen features</text>
+<rect x="196" y="174" width="102" height="44" rx="6" fill="url(#orange)" stroke="#EE9A28" />
+<text x="247" y="201.5" font-size="16" fill="#111111" font-weight="400" text-anchor="middle">LM Head</text>
+<rect x="345" y="171" width="174" height="50" rx="6" fill="url(#blue)" stroke="#6AA0EC" />
+<text x="432" y="192" font-size="16" fill="#111111" font-weight="400" text-anchor="middle">logits[t]</text>
+<text x="432" y="211" font-size="12" fill="#333333" font-weight="400" text-anchor="middle">For block A</text>
+<path d="M140 223H166V196H190" fill="none" stroke="#111111" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-gray)"/>
+<path d="M298 196H339" fill="none" stroke="#111111" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-gray)"/>
+<rect x="196" y="238" width="102" height="44" rx="6" fill="url(#orange)" stroke="#EE9A28" />
+<text x="247" y="265.5" font-size="16" fill="#111111" font-weight="400" text-anchor="middle">LM Head</text>
+<rect x="345" y="235" width="174" height="50" rx="6" fill="url(#blue)" stroke="#6AA0EC" />
+<text x="432" y="256" font-size="16" fill="#111111" font-weight="400" text-anchor="middle">logits[t]</text>
+<text x="432" y="275" font-size="12" fill="#333333" font-weight="400" text-anchor="middle">For block B</text>
+<path d="M140 223H166V260H190" fill="none" stroke="#111111" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-gray)"/>
+<path d="M298 260H339" fill="none" stroke="#111111" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-gray)"/>
+<text x="40" y="299" font-size="12" fill="#333333" font-weight="400" text-anchor="start">Checkpointing can repeat these projections in backward.</text>
+<path d="M40 310H528" fill="none" stroke="#6AA0EC" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" />
+<rect x="30" y="320" width="374" height="26" rx="6" fill="url(#mint)"/>
+<text x="40" y="338" font-size="16" fill="#111111" font-weight="600" text-anchor="start">Optimized: cache within a memory budget</text>
+<rect x="40" y="358" width="132" height="48" rx="6" fill="url(#blue)" stroke="#6AA0EC" />
+<text x="106" y="387.5" font-size="15" fill="#111111" font-weight="400" text-anchor="middle">Target context</text>
+<rect x="203" y="358" width="102" height="48" rx="6" fill="url(#orange)" stroke="#6AA0EC" />
+<text x="254" y="387.5" font-size="16" fill="#111111" font-weight="400" text-anchor="middle">LM Head</text>
+<rect x="337" y="349" width="182" height="66" rx="6" fill="url(#mint)" stroke="#00AA91" />
+<text x="428" y="374" font-size="15" fill="#111111" font-weight="600" text-anchor="middle">Target logits cache</text>
+<rect x="354" y="387" width="22" height="12" rx="2" fill="#B8D5FA" stroke="none" />
+<rect x="379" y="387" width="22" height="12" rx="2" fill="#B8D5FA" stroke="none" />
+<rect x="404" y="387" width="22" height="12" rx="2" fill="#3379E9" stroke="none" />
+<rect x="429" y="387" width="22" height="12" rx="2" fill="#B8D5FA" stroke="none" />
+<rect x="454" y="387" width="22" height="12" rx="2" fill="#B8D5FA" stroke="none" />
+<rect x="479" y="387" width="22" height="12" rx="2" fill="#B8D5FA" stroke="none" />
+<path d="M172 382H197" fill="none" stroke="#111111" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-blue)"/>
+<path d="M305 382H331" fill="none" stroke="#111111" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-blue)"/>
+<path d="M428 415V427H337V432" fill="none" stroke="#111111" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-blue)"/>
+<path d="M428 415V427H469V432" fill="none" stroke="#111111" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-blue)"/>
+<rect x="287" y="438" width="100" height="40" rx="6" fill="url(#blue)" stroke="#6AA0EC" />
+<text x="337" y="463.5" font-size="16" fill="#111111" font-weight="400" text-anchor="middle">block A</text>
+<rect x="419" y="438" width="100" height="40" rx="6" fill="url(#blue)" stroke="#6AA0EC" />
+<text x="469" y="463.5" font-size="16" fill="#111111" font-weight="400" text-anchor="middle">block B</text>
+<text x="40" y="461" font-size="13" fill="#333333" font-weight="400" text-anchor="start">Same logits[t] for both blocks</text>
+<text x="40" y="509" font-size="12" fill="#333333" font-weight="400" text-anchor="start">Full-context reuse: CP=1, within budget, less projection work.</text>
+<text x="40" y="531" font-size="12" fill="#333333" font-weight="400" text-anchor="start">Chunk caches can also retain Draft logits.</text>
+<text x="588" y="145" font-size="14" fill="#333333" font-weight="400" text-anchor="start">Tile the vocabulary; normalize over all vocabulary entries.</text>
+<text x="588" y="179" font-size="14" fill="#111111" font-weight="400" text-anchor="start">Draft logits</text>
+<text x="1072" y="179" font-size="12" fill="#333333" font-weight="400" text-anchor="end">Vocabulary V →</text>
+<text x="588" y="245" font-size="14" fill="#111111" font-weight="400" text-anchor="start">Target logits</text>
+<rect x="588" y="190" width="64" height="30" rx="3" fill="url(#blue)" stroke="#6AA0EC" />
+<rect x="658" y="190" width="64" height="30" rx="3" fill="url(#blue)" stroke="#6AA0EC" />
+<rect x="728" y="190" width="64" height="30" rx="3" fill="url(#blue)" stroke="#6AA0EC" />
+<rect x="798" y="190" width="64" height="30" rx="3" fill="#3379E9" stroke="#111111" />
+<text x="830" y="210" font-size="13" fill="#FFFFFF" font-weight="400" text-anchor="middle">tile j</text>
+<rect x="868" y="190" width="64" height="30" rx="3" fill="url(#blue)" stroke="#6AA0EC" />
+<rect x="938" y="190" width="64" height="30" rx="3" fill="url(#blue)" stroke="#6AA0EC" />
+<rect x="1008" y="190" width="64" height="30" rx="3" fill="url(#blue)" stroke="#6AA0EC" />
+<text x="1040" y="210" font-size="15" fill="#333333" font-weight="400" text-anchor="middle">…</text>
+<rect x="588" y="256" width="64" height="30" rx="3" fill="url(#blue)" stroke="#6AA0EC" />
+<rect x="658" y="256" width="64" height="30" rx="3" fill="url(#blue)" stroke="#6AA0EC" />
+<rect x="728" y="256" width="64" height="30" rx="3" fill="url(#blue)" stroke="#6AA0EC" />
+<rect x="798" y="256" width="64" height="30" rx="3" fill="#3379E9" stroke="#111111" />
+<text x="830" y="276" font-size="13" fill="#FFFFFF" font-weight="400" text-anchor="middle">tile j</text>
+<rect x="868" y="256" width="64" height="30" rx="3" fill="url(#blue)" stroke="#6AA0EC" />
+<rect x="938" y="256" width="64" height="30" rx="3" fill="url(#blue)" stroke="#6AA0EC" />
+<rect x="1008" y="256" width="64" height="30" rx="3" fill="url(#blue)" stroke="#6AA0EC" />
+<text x="1040" y="276" font-size="15" fill="#333333" font-weight="400" text-anchor="middle">…</text>
+<rect x="792" y="184" width="76" height="108" rx="5" fill="none" stroke="#6992C5" stroke-dasharray="3 4"/>
+<path d="M830 292V312" fill="none" stroke="#111111" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-blue)"/>
+<rect x="722" y="318" width="216" height="55" rx="6" fill="url(#mint)" stroke="#6AA0EC" />
+<text x="830" y="341" font-size="16" fill="#111111" font-weight="600" text-anchor="middle">Compute L1 by tile</text>
+<text x="830" y="361" font-size="12" fill="#333333" font-weight="400" text-anchor="middle">FP32 reduction statistics</text>
+<path d="M830 373V408" fill="none" stroke="#111111" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-blue)"/>
+<text x="588" y="400" font-size="14" fill="#333333" font-weight="400" text-anchor="start">Replay statistics cache</text>
+<rect x="588" y="414" width="484" height="46" rx="6" fill="url(#mint)" stroke="#00AA91" />
+<rect x="604" y="428" width="18" height="18" rx="2" fill="#87DCC2" stroke="none" />
+<rect x="627" y="428" width="18" height="18" rx="2" fill="#87DCC2" stroke="none" />
+<rect x="650" y="428" width="18" height="18" rx="2" fill="#87DCC2" stroke="none" />
+<rect x="673" y="428" width="18" height="18" rx="2" fill="#87DCC2" stroke="none" />
+<rect x="696" y="428" width="18" height="18" rx="2" fill="#87DCC2" stroke="none" />
+<rect x="719" y="428" width="18" height="18" rx="2" fill="#87DCC2" stroke="none" />
+<rect x="742" y="428" width="18" height="18" rx="2" fill="#87DCC2" stroke="none" />
+<rect x="765" y="428" width="18" height="18" rx="2" fill="#87DCC2" stroke="none" />
+<text x="817" y="444" font-size="16" fill="#111111" font-weight="600" text-anchor="start">8 × FP32 / position</text>
+<text x="588" y="486" font-size="14" fill="#111111" font-weight="600" text-anchor="start">Reconstruct during backward</text>
+<rect x="588" y="500" width="145" height="42" rx="6" fill="url(#blue)" stroke="#6AA0EC" />
+<text x="660.5" y="526.5" font-size="15" fill="#111111" font-weight="400" text-anchor="middle">logits + statistics</text>
+<path d="M733 521H754" fill="none" stroke="#111111" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-blue)"/>
+<rect x="760" y="500" width="148" height="42" rx="6" fill="url(#blue)" stroke="#6AA0EC" />
+<text x="834" y="526.5" font-size="15" fill="#111111" font-weight="400" text-anchor="middle">softmax tile</text>
+<path d="M908 521H934" fill="none" stroke="#111111" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-blue)"/>
+<rect x="940" y="500" width="132" height="42" rx="6" fill="url(#blue)" stroke="#6AA0EC" />
+<text x="1006" y="526.5" font-size="15" fill="#111111" font-weight="400" text-anchor="middle">Gradients</text>
+<text x="588" y="564" font-size="12" fill="#333333" font-weight="400" text-anchor="start">Statistics only; logits and temporary workspace are separate.</text>
+<text x="40" y="553" font-size="12" fill="#333333">Cache lifetime: one forward/backward.</text>
+</svg>

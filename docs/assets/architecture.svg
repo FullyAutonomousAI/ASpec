@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="520" viewBox="0 0 1440 520" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">ASpec: asynchronous training with shared Target features</title>
+  <desc id="desc">Work-aware scheduling feeds an asynchronous pipeline: data enters the SGLang Target engine, compatible features enter bounded GPU buffers, and independent Draft trainers read shared features and produce separate checkpoints. Inside each Draft, tightly packed token segments distributed across context shards illustrate packing and context parallelism. A schematic timeline shows Target generation overlapping both Draft experiments, each progressing independently. Shared features are illustrated within a single node; experiments retain independent weights, optimizers and progress. GPU and context shard counts are illustrative. Timeline bars are not measurements or synchronization barriers.</desc>
+  <defs>
+    <style>
+      text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; }
+      .ink { fill: #172B43; } .muted { fill: #64758A; }
+      .heading { font-size: 30px; font-weight: 600; } .sub { font-size: 20px; }
+      .line { stroke: #718198; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+      .control { stroke: #B6C0CD; stroke-width: 1.6; stroke-dasharray: 4 6; }
+    </style>
+  </defs>
+  <rect width="1440" height="520" rx="20" fill="#FFFFFF"/>
+
+  <!-- A small control rail leaves the feature pipeline visually dominant. -->
+  <path d="M210 48H582M832 48H1244" stroke="#DFE5ED" stroke-width="1.5"/>
+  <text x="707" y="54" text-anchor="middle" class="sub muted">Work-aware scheduling</text>
+  <path d="M336 49V122M695 65V122M1121 49V89" class="control"/>
+  <g stroke="#B6C0CD" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M331 115L336 122L341 115M690 115L695 122L700 115M1116 82L1121 89L1126 82"/>
+  </g>
+
+  <!-- Data and Target feature production. -->
+  <g stroke="#91A1B5" stroke-width="2" stroke-linejoin="round">
+    <rect x="67" y="207" width="54" height="68" rx="7" fill="#F8FAFC"/>
+    <rect x="57" y="217" width="54" height="68" rx="7" fill="#FFFFFF"/>
+    <path d="M70 237H98M70 249H98M70 261H89" stroke-linecap="round"/>
+  </g>
+  <text x="88" y="322" text-anchor="middle" class="sub muted">Data</text>
+  <path d="M134 264H196M188 258L196 264L188 270" class="line"/>
+  <rect x="210" y="124" width="252" height="280" rx="22" fill="#EDF4FF" stroke="#B8D1F5" stroke-width="1.5"/>
+  <text x="238" y="174" class="heading ink">Target</text>
+  <text x="238" y="210" fill="#3468A8" font-size="22" font-weight="600">SGLang</text>
+  <g stroke="#6E9DD8" stroke-width="1.7" fill="#DCE9FC">
+    <rect x="238" y="245" width="48" height="43" rx="7"/>
+    <rect x="300" y="245" width="48" height="43" rx="7"/>
+    <rect x="362" y="245" width="48" height="43" rx="7"/>
+    <path d="M249 238V245M263 238V245M277 238V245M249 288V295M263 288V295M277 288V295M311 238V245M325 238V245M339 238V245M311 288V295M325 288V295M339 288V295M373 238V245M387 238V245M401 238V245M373 288V295M387 288V295M401 288V295"/>
+  </g>
+  <text x="238" y="368" class="sub muted">Feature generation</text>
+  <path d="M462 264H516M508 258L516 264L508 270" class="line"/>
+
+  <!-- One compatible feature source fans out to independent consumers. -->
+  <rect x="530" y="124" width="330" height="280" rx="22" fill="#EAF7F2" stroke="#A5D5C7" stroke-width="1.5"/>
+  <text x="558" y="174" class="heading ink">Shared features</text>
+  <text x="558" y="210" fill="#2F7D68" class="sub">GPU tensor transport</text>
+  <g stroke="#65AF97" stroke-width="1.4">
+    <rect x="558" y="249" width="46" height="43" rx="7" fill="#8AC9B3"/>
+    <rect x="614" y="249" width="46" height="43" rx="7" fill="#A6D7C5"/>
+    <rect x="670" y="249" width="46" height="43" rx="7" fill="#BDE2D4"/>
+    <rect x="726" y="249" width="46" height="43" rx="7" fill="#D4EBE1"/>
+    <rect x="782" y="249" width="46" height="43" rx="7" fill="#FFFFFF" stroke-dasharray="4 4"/>
+  </g>
+  <text x="558" y="368" class="sub muted">Bounded GPU buffers</text>
+  <path d="M860 264H923V186H984M976 180L984 186L976 192" class="line"/>
+  <path d="M923 264V342H984M976 336L984 342L976 348" class="line"/>
+  <circle cx="923" cy="264" r="4.5" fill="#718198"/>
+
+  <text x="1121" y="105" text-anchor="middle" fill="#7855A3" class="sub" font-weight="600">Independent Drafts</text>
+  <rect x="998" y="124" width="246" height="124" rx="19" fill="#F2EDFC" stroke="#CFBCEF" stroke-width="1.5"/>
+  <text x="1020" y="162" class="heading ink">Draft A</text>
+  <rect x="998" y="280" width="246" height="124" rx="19" fill="#F2EDFC" stroke="#CFBCEF" stroke-width="1.5"/>
+  <text x="1020" y="318" class="heading ink">Draft B</text>
+
+  <!-- Adjacent document segments fill each row; separate GPU frames denote CP shards. -->
+  <g stroke="#AF95D1" stroke-width="1.4" fill="#FFFFFF">
+    <rect x="1020" y="176" width="94" height="27" rx="5"/>
+    <rect x="1128" y="176" width="94" height="27" rx="5"/>
+    <rect x="1020" y="332" width="94" height="27" rx="5"/>
+    <rect x="1128" y="332" width="94" height="27" rx="5"/>
+    <path d="M1039 172V176M1067 172V176M1095 172V176M1039 203V207M1067 203V207M1095 203V207M1147 172V176M1175 172V176M1203 172V176M1147 203V207M1175 203V207M1203 203V207M1039 328V332M1067 328V332M1095 328V332M1039 359V363M1067 359V363M1095 359V363M1147 328V332M1175 328V332M1203 328V332M1147 359V363M1175 359V363M1203 359V363"/>
+  </g>
+  <g>
+    <path d="M1025 181H1075V198H1025Z" fill="#AA8BCD"/>
+    <path d="M1076 181H1109V198H1076Z" fill="#70BCA2"/>
+    <path d="M1133 181H1158V198H1133Z" fill="#70BCA2"/>
+    <path d="M1159 181H1217V198H1159Z" fill="#D0BAE8"/>
+    <path d="M1025 337H1055V354H1025Z" fill="#70BCA2"/>
+    <path d="M1056 337H1109V354H1056Z" fill="#D0BAE8"/>
+    <path d="M1133 337H1147V354H1133Z" fill="#D0BAE8"/>
+    <path d="M1148 337H1217V354H1148Z" fill="#AA8BCD"/>
+  </g>
+  <text x="1121" y="232" text-anchor="middle" fill="#7855A3" font-size="17">Packing · Context parallelism</text>
+  <text x="1121" y="388" text-anchor="middle" fill="#7855A3" font-size="17">Packing · Context parallelism</text>
+  <path d="M1244 186H1292M1284 180L1292 186L1284 192M1244 342H1292M1284 336L1292 342L1284 348" class="line"/>
+
+  <!-- Separate checkpoint glyphs, rather than a shared output or step barrier. -->
+  <text x="1340" y="105" text-anchor="middle" class="sub muted">Checkpoints</text>
+  <g fill="#FBF8FF" stroke="#B49ACE" stroke-width="1.8" stroke-linejoin="round">
+    <path d="M1320 156H1350L1364 170V215H1320ZM1350 156V170H1364"/>
+    <path d="M1320 312H1350L1364 326V371H1320ZM1350 312V326H1364"/>
+  </g>
+  <text x="1342" y="199" text-anchor="middle" fill="#7855A3" font-size="20" font-weight="600">A</text>
+  <text x="1342" y="355" text-anchor="middle" fill="#7855A3" font-size="20" font-weight="600">B</text>
+
+  <!-- A compact secondary cue; timing and relative rates are purely schematic. -->
+  <g transform="translate(530 438)">
+    <text x="0" y="29" fill="#8A96A6" font-size="18">Async overlap</text>
+    <g fill="#8A96A6" font-size="15">
+      <text x="170" y="9">Target</text>
+      <text x="170" y="29">Draft A</text>
+      <text x="170" y="49">Draft B</text>
+    </g>
+    <g fill="#CEDBEC">
+      <rect x="244" y="0" width="54" height="8" rx="3"/>
+      <rect x="304" y="0" width="54" height="8" rx="3"/>
+      <rect x="364" y="0" width="54" height="8" rx="3"/>
+      <rect x="424" y="0" width="54" height="8" rx="3"/>
+      <rect x="484" y="0" width="54" height="8" rx="3"/>
+      <rect x="544" y="0" width="54" height="8" rx="3"/>
+      <rect x="604" y="0" width="54" height="8" rx="3"/>
+      <rect x="664" y="0" width="50" height="8" rx="3" fill="#E6EDF6"/>
+    </g>
+    <g fill="#DED3EB">
+      <rect x="310" y="20" width="75" height="8" rx="3"/>
+      <rect x="392" y="20" width="75" height="8" rx="3"/>
+      <rect x="474" y="20" width="75" height="8" rx="3"/>
+      <rect x="556" y="20" width="75" height="8" rx="3"/>
+      <rect x="638" y="20" width="76" height="8" rx="3" fill="#EBE4F2"/>
+      <rect x="322" y="40" width="64" height="8" rx="3"/>
+      <rect x="394" y="40" width="64" height="8" rx="3"/>
+      <rect x="466" y="40" width="64" height="8" rx="3"/>
+      <rect x="538" y="40" width="64" height="8" rx="3"/>
+      <rect x="610" y="40" width="64" height="8" rx="3"/>
+      <rect x="682" y="40" width="32" height="8" rx="3" fill="#EBE4F2"/>
+    </g>
+  </g>
+</svg>

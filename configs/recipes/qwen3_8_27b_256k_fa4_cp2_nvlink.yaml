@@ -1,0 +1,116 @@
+# Release training starting point: three passes, held-out eval and checkpoints.
+# Hyperparameters are not a convergence/quality claim; see docs/user-guide/recipes.md.
+# Portable execution template. See configs/README.md for required inputs and scope.
+# Adapted from AngelSpec's validated H200 Qwen3.8-27B 256K capacity-unlock
+# lane and expressed through ASpec's canonical schema. One 8-GPU node:
+# three TP2 Target engines (six GPUs) and one two-rank Direct CP trainer.
+# Native prefill with optimized direct prefill disabled: one concurrent TP2 request
+# per replica and two source slots for the 261888-token workload.
+
+model:
+  target_model_path: ${oc.env:ASPEC_TARGET_MODEL}
+  native_context_length: 262144
+  trust_remote_code: false
+  draft_model_config: aspec/config/dspark_qwen3_8_27b_draft_config.json
+  embedding_key: model.language_model.embed_tokens.weight
+  lm_head_key: lm_head.weight
+  norm_key: model.language_model.norm.weight
+
+dataset:
+  eval_interval: 100
+  eval_micro_batch_size: 1
+  train_data_path: ${oc.env:ASPEC_TRAIN_DATA}
+  eval_data_path: ${oc.env:ASPEC_EVAL_DATA}
+  chat_template: null
+  min_loss_tokens: 14
+  shuffle_dataset: true
+
+training:
+  dflash_packing: true
+  attention_backend: fa4
+  draft_context_parallel_size: 2
+  micro_batch_size: 1
+  draft_accumulation_steps: 2
+  learning_rate: 6e-4
+  min_lr: 6e-5
+  weight_decay: 0.0
+  max_concurrent_batches: 1
+  streaming_dispatch_with_training: true
+  pipeline_dispatch_with_training: true
+  max_grad_norm: 1.0
+  max_seq_length: 261888
+  num_epochs: 3
+  seed: 42
+  training_num_gpus_per_node: 2
+  training_num_nodes: 1
+  placement_strategy: inference_first
+  ttt_length: 7
+  fsdp_strategy: REPLICATE
+  fsdp_reduce_dtype: bfloat16
+  prefetch_depth: 1
+  save_interval: 100
+  save_per_epoch: false
+  save_final_checkpoint: true
+  warmup_ratio: 0.04
+  dflash_block_size: 7
+  dspark_num_anchors: 512
+  dspark_num_target_layers: 5
+  dspark_loss_decay_gamma: 4.0
+  dspark_ce_loss_alpha: 0.1
+  dspark_l1_loss_alpha: 0.9
+  dspark_confidence_head_alpha: 1.0
+
+inference:
+  inference_engine_type: sgl
+  store_last_hidden_states: true
+  target_prefill_memory_optimized: false
+  inference_num_gpus: 6
+  inference_num_gpus_per_engine: 2
+  inference_num_gpus_per_node: 8
+  inference_fetch_batch: 8
+  inference_buffer_threshold: 2
+  max_sample_pool_size: 24
+  inference_batch_size: 1
+  sglang:
+    tp_size: 2
+    mem_fraction_static: 0.90
+    extra_args:
+      max_total_tokens: 262144
+      max_prefill_tokens: 262144
+      max_running_requests: 1
+
+mooncake:
+  master_server_address: null
+  metadata_server: null
+  data_plane: transfer_engine
+  protocol: nvlink_intra
+  require_nvlink: true
+  global_segment_size: 8GB
+  local_buffer_size: 1GB
+  host_buffer_size: 1GB
+  # Keep the slot size derived from the CP2 context-shard payload. An explicit
+  # full-sequence size would reserve twice the required HBM on every Target.
+  max_seq_len: 261888
+  hidden_dim: 5120
+  async_put_pool_size: 1
+  kv_lease_ttl_s: 60
+  get_retry_max_wait_seconds: 300
+  gpu_ring_slots: 2
+  source_gpu_ring_slots: 2
+  destination_gpu_ring_slots: 1
+  enable_gpu_direct: true
+  allow_host_fallback: false
+  enable_hard_pin: false
+
+logging:
+  report_to: none
+
+debug:
+  enable_perf_metrics: true
+  performance_measurement_required: false
+  performance_warmup_steps: 2
+  performance_drain_steps: 1
+  timeline_enabled: false
+
+output_dir: outputs/qwen3_8_27b_256k_fa4_cp2_nvlink
+cache_dir: cache/qwen3_8_27b_256k_fa4_cp2_nvlink

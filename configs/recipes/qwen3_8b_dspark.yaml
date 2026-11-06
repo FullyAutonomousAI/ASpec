@@ -1,0 +1,104 @@
+# Release training starting point: three passes, held-out eval and checkpoints.
+# Hyperparameters are not a convergence/quality claim; see docs/user-guide/recipes.md.
+# Portable execution template. See configs/README.md for required inputs and scope.
+# DSpark 4K execution template; supply training and held-out evaluation data.
+# The workload contract is shared; runtime knobs remain framework-native.
+
+model:
+  target_model_path: ${oc.env:ASPEC_TARGET_MODEL,Qwen/Qwen3-8B}
+  native_context_length: 32768
+  trust_remote_code: false
+  draft_model_config: aspec/config/dspark_draft_config.json
+
+dataset:
+  eval_interval: 100
+  eval_micro_batch_size: 1
+  train_data_path: ${oc.env:ASPEC_TRAIN_DATA}
+  eval_data_path: ${oc.env:ASPEC_EVAL_DATA}
+  chat_template: null
+  min_loss_tokens: 32
+  shuffle_dataset: true
+
+training:
+  attention_backend: fa4
+  draft_context_parallel_size: 1
+  micro_batch_size: 1
+  draft_accumulation_steps: 128
+  learning_rate: 6e-4
+  min_lr: 6e-5
+  weight_decay: 0.0
+  max_concurrent_batches: 1
+  streaming_dispatch_with_training: true
+  pipeline_dispatch_with_training: true
+  max_grad_norm: 1.0
+  max_seq_length: 4096
+  num_epochs: 3
+  seed: 42
+  training_num_gpus_per_node: 4
+  training_num_nodes: 1
+  placement_strategy: inference_first
+  ttt_length: 7
+  fsdp_strategy: REPLICATE
+  fsdp_reduce_dtype: bfloat16
+  prefetch_depth: 1
+  save_interval: 100
+  save_per_epoch: false
+  save_final_checkpoint: true
+  warmup_ratio: 0.04
+  dflash_block_size: 7
+  dflash_packing: true
+  dspark_num_anchors: 512
+  dspark_num_target_layers: 5
+  dspark_loss_decay_gamma: 4.0
+  dspark_ce_loss_alpha: 0.1
+  dspark_l1_loss_alpha: 0.9
+  dspark_confidence_head_alpha: 1.0
+
+inference:
+  inference_engine_type: sgl
+  store_last_hidden_states: true
+  target_prefill_memory_optimized: false
+  inference_num_gpus: 4
+  inference_num_gpus_per_engine: 1
+  inference_num_gpus_per_node: 8
+  inference_fetch_batch: 8
+  inference_buffer_threshold: 2
+  max_sample_pool_size: 12
+  inference_batch_size: 2
+  sglang:
+    tp_size: 1
+    mem_fraction_static: 0.5
+
+mooncake:
+  master_server_address: null
+  metadata_server: null
+  data_plane: transfer_engine
+  protocol: nvlink_intra
+  require_nvlink: true
+  global_segment_size: 64GB
+  local_buffer_size: 8GB
+  host_buffer_size: 14GB
+  max_seq_len: 4096
+  hidden_dim: 4096
+  async_put_pool_size: 1
+  kv_lease_ttl_s: 60
+  get_retry_max_wait_seconds: 120
+  gpu_ring_slots: 3
+  source_gpu_ring_slots: 3
+  destination_gpu_ring_slots: 1
+  enable_gpu_direct: true
+  allow_host_fallback: false
+  enable_hard_pin: false
+
+logging:
+  report_to: none
+
+debug:
+  enable_perf_metrics: true
+  performance_measurement_required: false
+  performance_warmup_steps: 2
+  performance_drain_steps: 1
+  timeline_enabled: false
+
+output_dir: outputs/qwen3_8b_dspark
+cache_dir: cache/qwen3_8b_dspark

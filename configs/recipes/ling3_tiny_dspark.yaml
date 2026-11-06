@@ -1,0 +1,100 @@
+# Release training starting point: three passes, held-out eval and checkpoints.
+# Hyperparameters are not a convergence/quality claim; see docs/user-guide/recipes.md.
+# Ling-3.0-tiny BF16 Target + two-layer dense DSpark Draft.
+# Data must use Ling's checkpoint chat template; see the recipe document.
+# Initial two-GPU validation plan. Scale replicas from measured service rates.
+model:
+  target_model_path: ${oc.env:ASPEC_TARGET_MODEL,inclusionAI/Ling-3.0-tiny}
+  native_context_length: 131072
+  trust_remote_code: true
+  draft_model_config: aspec/config/dspark_ling3_tiny_draft_config.json
+  embedding_key: model.word_embeddings.weight
+  lm_head_key: lm_head.weight
+  norm_key: model.norm.weight
+
+dataset:
+  eval_interval: 100
+  eval_micro_batch_size: 1
+  train_data_path: ${oc.env:ASPEC_TRAIN_DATA}
+  eval_data_path: ${oc.env:ASPEC_EVAL_DATA}
+  chat_template: ling3
+  prompt_key: conversations
+  min_loss_tokens: 32
+  shuffle_dataset: true
+
+training:
+  attention_backend: cudnn_flex_attention
+  draft_context_parallel_size: 1
+  micro_batch_size: 1
+  draft_accumulation_steps: 16
+  learning_rate: 6e-4
+  min_lr: 6e-5
+  weight_decay: 0.0
+  max_concurrent_batches: 1
+  streaming_dispatch_with_training: true
+  pipeline_dispatch_with_training: true
+  max_grad_norm: 1.0
+  max_seq_length: 4096
+  num_epochs: 3
+  seed: 42
+  training_num_gpus_per_node: 1
+  training_num_nodes: 1
+  placement_strategy: inference_first
+  fsdp_strategy: REPLICATE
+  fsdp_reduce_dtype: bfloat16
+  prefetch_depth: 1
+  save_interval: 100
+  save_per_epoch: false
+  save_final_checkpoint: true
+  max_checkpoints: 2
+  warmup_ratio: 0.04
+  dflash_block_size: 7
+  dflash_packing: false
+  dspark_num_anchors: 512
+  dspark_num_target_layers: 5
+  dspark_loss_decay_gamma: 4.0
+  dspark_ce_loss_alpha: 0.1
+  dspark_l1_loss_alpha: 0.9
+  dspark_confidence_head_alpha: 1.0
+
+inference:
+  inference_engine_type: sgl
+  store_last_hidden_states: true
+  # Native Ling runtime publishes GPU features through its forward-hook API.
+  # Normal Target attention state is retained; optimized direct prefill is disabled.
+  target_prefill_memory_optimized: false
+  inference_num_gpus: 1
+  inference_num_gpus_per_engine: 1
+  inference_num_gpus_per_node: 2
+  inference_fetch_batch: 8
+  inference_buffer_threshold: 2
+  max_sample_pool_size: 32
+  inference_batch_size: 2
+  sglang:
+    tp_size: 1
+    mem_fraction_static: 0.6
+
+mooncake:
+  data_plane: transfer_engine
+  protocol: nvlink_intra
+  require_nvlink: true
+  enable_gpu_direct: true
+  allow_host_fallback: false
+  enable_hard_pin: true
+  max_seq_len: 4096
+  hidden_dim: 1536
+  global_segment_size: 16GB
+  local_buffer_size: 4GB
+  host_buffer_size: 1GB
+  gpu_ring_slots: 32
+  source_gpu_ring_slots: 32
+  destination_gpu_ring_slots: 1
+  kv_lease_ttl_s: 600
+  get_retry_max_wait_seconds: 600
+
+logging:
+  report_to: none
+debug:
+  enable_perf_metrics: true
+output_dir: outputs/ling3-tiny-dspark
+cache_dir: cache/ling3-tiny-dspark

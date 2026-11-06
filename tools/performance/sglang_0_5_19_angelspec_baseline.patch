@@ -1,0 +1,58 @@
+diff --git a/python/sglang/srt/managers/scheduler.py b/python/sglang/srt/managers/scheduler.py
+--- a/python/sglang/srt/managers/scheduler.py
++++ b/python/sglang/srt/managers/scheduler.py
+@@ -896,7 +896,7 @@ class Scheduler(
+     def init_eagle_mooncake_store(self, device=None):
+         if self.server_args.enable_spec_training_mooncake:
+             try:
+-                from aspec.transfer.mooncake import (
++                from angelspec.transfer.mooncake import (
+                     EagleMooncakeStore,
+                     MooncakeConfig,
+                 )
+@@ -911,18 +911,15 @@ class Scheduler(
+                     store.warmup_rdma()
+                 self.eagle_mooncake_store = store
+                 logger.info("EagleMooncakeStore initialized for spec training")
+             except ImportError:
+                 logger.warning(
+-                    "aspec.mooncake not found. Spec training mooncake store disabled."
++                    "angelspec.mooncake not found. Spec training mooncake store disabled."
+                 )
+ 
+     def _aspec_transport_status_message(self):
+-        if self.eagle_mooncake_store is None:
+-            return ""
+-        status = self.eagle_mooncake_store.get_p2p_status()
+-        if status is None:
+-            return ""
+-        return json.dumps(status, sort_keys=True, separators=(",", ":"))
++        # The frozen AngelSpec baseline uses Mooncake Store rather than
++        # ASpec's generation-checked TransferEngine data plane.
++        return ""
+ 
+     def _configure_aspec_target_prefill_model(self):
+         if os.getenv("ASPEC_TARGET_PREFILL_MEMORY_OPTIMIZED") != "1":
+@@ -3238,21 +3235,7 @@ class Scheduler(
+         """Flush the memory pool and cache."""
+         if self.is_fully_idle():
+             if self.eagle_mooncake_store is not None:
+-                drain_timeout = max(
+-                    float(
+-                        self.eagle_mooncake_store.config.get_retry_max_wait_seconds
+-                    ),
+-                    5.0,
+-                )
+-                drained = self.eagle_mooncake_store.wait_for_p2p_source_releases(
+-                    timeout=drain_timeout
+-                )
+-                if not drained:
+-                    logger.error(
+-                        "Timed out waiting for ASpec P2P source slots to drain"
+-                    )
+-                    self.aspec_timeline.flush()
+-                    return False
++                self.eagle_mooncake_store.flush()
+                 self.aspec_timeline.flush()
+             self.cur_batch = None
+             self.last_batch = None

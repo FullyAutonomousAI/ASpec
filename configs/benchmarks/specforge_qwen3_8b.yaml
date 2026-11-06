@@ -1,0 +1,71 @@
+# Latest SpecForge main, native 4K DSpark: four TP1 capture servers + DP4 Draft.
+# Override model/data/checkpoint/output paths for the benchmark host.
+model:
+  target_model_path: Qwen/Qwen3-8B
+  draft_model_config: configs/qwen3-8b-dspark.json
+  draft_checkpoint_path: /path/to/common-initial-draft
+  target_backend: sglang
+  trust_remote_code: true
+  torch_dtype: bfloat16
+  sglang_mem_fraction_static: 0.5
+data:
+  prompts_path: /path/to/specforge-4k-prompts.jsonl
+  max_length: 4096
+  chat_template: qwen
+training:
+  strategy: dspark
+  num_epochs: 1
+  max_steps: 4096
+  batch_size: 1
+  accumulation_steps: 2
+  fsdp_sharding: NO_SHARD
+  learning_rate: 0.0006
+  warmup_ratio: 0.04
+  max_grad_norm: 1.0
+  attention_backend: flex_attention
+  num_anchors: 512
+  loss_decay_gamma: 4.0
+  objective_chunk_blocks: 128
+  save_interval: 0
+  log_interval: 1
+  dist_timeout: 300
+  seed: 42
+tracking:
+  report_to: none
+runtime:
+  producer_lease: 8
+  producer_concurrency: 1
+  in_flight_high_watermark: 64
+  in_flight_low_watermark: 32
+  resident_high_watermark_bytes: 34359738368
+  resident_low_watermark_bytes: 17179869184
+  feature_store_max_resident_bytes: 34359738368
+run_id: specforge-qwen3-8b-dspark-4k
+output_dir: /path/to/specforge-4k-output
+deployment:
+  mode: disaggregated
+  trainer:
+    nnodes: 1
+    nproc_per_node: 4
+  disaggregated:
+    # managed_local processes concurrently update this directory; keep it on
+    # node-local storage rather than NFS or another distributed filesystem.
+    control_dir: /tmp/specforge-qwen3-8b-dspark-4k-control
+    backend: mooncake
+    # Upstream main's documented v0.5.18 path uses its versioned capture patch.
+    server_capture: patch
+    client_buffer_size: 1073741824
+    receive_buffers: cuda
+    receive_pool_bytes: 4294967296
+    managed_local:
+      trainer_cuda_visible_devices: ["4", "5", "6", "7"]
+      mooncake:
+        protocol: nvlink
+        global_segment_size_bytes: 1073741824
+        arena_bytes: 8589934592
+        local_buffer_size_bytes: 1073741824
+      capture_servers:
+        - {port: 30000, cuda_visible_devices: ["0"], tp_size: 1, mem_fraction_static: 0.5, gpu_put: true}
+        - {port: 30001, cuda_visible_devices: ["1"], tp_size: 1, mem_fraction_static: 0.5, gpu_put: true}
+        - {port: 30002, cuda_visible_devices: ["2"], tp_size: 1, mem_fraction_static: 0.5, gpu_put: true}
+        - {port: 30003, cuda_visible_devices: ["3"], tp_size: 1, mem_fraction_static: 0.5, gpu_put: true}

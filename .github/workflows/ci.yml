@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main, "ossrc/**", "**/oss-rc"]
+
+permissions:
+  contents: read
+
+jobs:
+  quality-and-package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Install build tools
+        run: python -m pip install --upgrade build ruff
+      - name: Lint
+        run: python -m ruff check aspec tests tools setup.py
+      - name: Compile Python sources
+        run: python -m compileall -q aspec tests tools
+      - name: Check maintained documentation links
+        run: python -m tools.check_docs
+      - name: Build source and wheel distributions
+        run: python -m tools.build_release --outdir dist
+      - name: Save audited distributions and runtime requirements
+        uses: actions/upload-artifact@v7
+        with:
+          name: aspec-distributions
+          path: dist/
+          if-no-files-found: error
+
+  cpu-contract-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Install CPU test runtime
+        run: |
+          python -m venv "$RUNNER_TEMP/aspec-ci-venv"
+          source "$RUNNER_TEMP/aspec-ci-venv/bin/activate"
+          echo "$VIRTUAL_ENV/bin" >> "$GITHUB_PATH"
+          echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> "$GITHUB_ENV"
+          python -m pip install --upgrade pip
+          python -m pip install \
+            --index-url https://download.pytorch.org/whl/cpu \
+            torch==2.13.0+cpu
+          python -m pip install -r requirements/ci-cpu.txt
+          python -m pip install --no-deps -e .
+      - name: Run dependency-light source contracts
+        run: python -m pytest -q tests/test_source_quality_contracts.py
+      - name: Run offline CPU contracts
+        env:
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
+        run: |
+          python -m pytest -q \
+            tests/test_capacity_handling.py \
+            tests/test_environment_scripts.py \
+            tests/test_onboarding.py \
+            tests/test_dependency_extras.py \
+            tests/test_cudnn_gqa_mode.py \
+            tests/test_dependency_audit.py \
+            tests/test_draft_model_config.py \
+            tests/test_draft_dsa.py \
+            tests/test_eagle4.py \
+            tests/test_eagle4_moe.py \
+            tests/test_eagle4_validation.py \
+            tests/test_fa4_import_compat.py \
+            tests/test_open_source_entrypoints.py \
+            tests/test_release_audit.py \
+            tests/test_shipped_config_defaults.py \
+            tests/test_release_recipes.py \
+            tests/test_recipe_node_loss.py \
+            tests/test_owner_fence.py \
+            tests/test_recipe_capacity.py \
+            tests/test_node_local_files.py \
+            tests/test_stage_recipe_inputs.py \
+            tests/test_target_lm_head.py \
+            tests/test_dspark_teacher_contract.py \
+            tests/test_planning.py \
+            tests/test_renderer_registry.py \
+            tests/test_reporting.py \
+            tests/test_training_config_validation.py
+          python -m pytest -q tests/test_wheel_assets.py tests/test_sglang_patch_contract.py
+
+  wheel-install:
+    needs: quality-and-package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - uses: actions/download-artifact@v8
+        with:
+          name: aspec-distributions
+          path: dist/
+      - name: Verify distribution checksums
+        working-directory: dist
+        run: sha256sum --check SHA256SUMS
+      - name: Prepare isolated CPU installation fixture
+        run: |
+          python -m venv "$RUNNER_TEMP/aspec-wheel-venv"
+          source "$RUNNER_TEMP/aspec-wheel-venv/bin/activate"
+          echo "$VIRTUAL_ENV/bin" >> "$GITHUB_PATH"
+          echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> "$GITHUB_ENV"
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.13.0+cpu
+          python -m pip install -r requirements/ci-cpu.txt
+          # Deliberately test the wheel and patch CLI with a CPU dependency subset.
+          # This is not installation/acceptance of the production GPU runtime.
+          python -m pip install --no-deps dist/*.whl sglang==0.5.21
+      - name: Exercise installed commands outside the checkout
+        env:
+          CUDA_VISIBLE_DEVICES: ""
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
+        run: python tools/check_wheel_install.py

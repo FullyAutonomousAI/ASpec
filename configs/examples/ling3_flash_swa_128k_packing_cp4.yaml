@@ -1,0 +1,114 @@
+# Supplementary configuration example; see the support matrix for supported workflows.
+# Inspect its inputs, step limits and support boundary before use.
+# Ling-3.0-flash Target + dense MHA/SWA Draft at 128K with real packing and CP4.
+# This is a functional long-context representative combination, not a throughput
+# or quality claim. Override dataset.train_data_path with real long documents.
+model:
+  target_model_path: inclusionAI/Ling-3.0-flash
+  native_context_length: 262144
+  trust_remote_code: true
+  draft_model_config: aspec/config/dspark_ling3_flash_swa_draft_config.json
+  embedding_key: model.word_embeddings.weight
+  lm_head_key: lm_head.weight
+  norm_key: model.norm.weight
+
+dataset:
+  train_data_path: ../../examples/data/sample_conversations.jsonl
+  eval_data_path: null
+  chat_template: ling3
+  prompt_key: conversations
+  min_loss_tokens: 32
+  shuffle_dataset: false
+  dataset_seed: 42
+
+training:
+  attention_backend: fa4
+  draft_context_parallel_size: 4
+  micro_batch_size: 1
+  draft_accumulation_steps: 1
+  learning_rate: 6e-4
+  min_lr: 6e-5
+  weight_decay: 0.0
+  max_grad_norm: 1.0
+  max_seq_length: 131072
+  num_epochs: 100
+  num_train_steps: 16
+  lr_total_steps: 32
+  warmup_ratio: 0.04
+  seed: 42
+  continual_training: false
+  deterministic_anchor_sampling: false
+  training_num_gpus_per_node: 4
+  training_num_nodes: 1
+  placement_strategy: inference_first
+  fsdp_strategy: REPLICATE
+  fsdp_reduce_dtype: bfloat16
+  max_concurrent_batches: 1
+  streaming_dispatch_with_training: true
+  pipeline_dispatch_with_training: true
+  prefetch_depth: 1
+  save_interval: 8
+  save_per_epoch: false
+  save_final_checkpoint: true
+  max_checkpoints: 2
+  dflash_block_size: 8
+  dflash_packing: true
+  # Wait for two documents so the normal path creates a genuinely packed row.
+  # CP4 consumes four source descriptors per document; the eight source slots
+  # below are therefore the minimum resident capacity for this threshold.
+  packing_min_samples_per_dispatch: 2
+  dspark_num_anchors: 512
+  dspark_num_target_layers: 5
+  dspark_loss_decay_gamma: 4.0
+  dspark_ce_loss_alpha: 0.1
+  dspark_l1_loss_alpha: 0.9
+  dspark_confidence_head_alpha: 1.0
+
+inference:
+  inference_engine_type: sgl
+  store_last_hidden_states: true
+  # Ling's native capture path materializes the Target observation before the
+  # transport publisher shards it for CP4; the direct-prefill optimization is
+  # currently limited to supported TP1 Target families and must not be faked.
+  target_prefill_memory_optimized: false
+  inference_num_gpus: 4
+  inference_num_gpus_per_engine: 4
+  inference_num_gpus_per_node: 8
+  inference_fetch_batch: 1
+  inference_buffer_threshold: 2
+  max_sample_pool_size: 2
+  inference_batch_size: 1
+  sglang:
+    init_timeout: 1200
+    tp_size: 4
+    mem_fraction_static: 0.9
+    extra_args:
+      max_total_tokens: 131584
+      max_prefill_tokens: 131584
+      max_running_requests: 1
+
+mooncake:
+  data_plane: transfer_engine
+  protocol: nvlink_intra
+  require_nvlink: true
+  enable_gpu_direct: true
+  allow_host_fallback: false
+  enable_hard_pin: true
+  max_seq_len: 131072
+  hidden_dim: 2560
+  global_segment_size: 32GB
+  local_buffer_size: 12GB
+  host_buffer_size: 8GB
+  gpu_ring_slots: 8
+  source_gpu_ring_slots: 8
+  destination_gpu_ring_slots: 1
+  async_put_pool_size: 1
+  kv_lease_ttl_s: 600
+  get_retry_max_wait_seconds: 600
+
+logging:
+  report_to: none
+debug:
+  enable_perf_metrics: true
+output_dir: outputs/ling3-flash-swa-128k-packing-cp4
+cache_dir: cache/ling3-flash-swa-128k-packing-cp4

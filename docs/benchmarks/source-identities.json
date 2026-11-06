@@ -1,0 +1,186 @@
+{
+  "schema_version": 1,
+  "comparison_date": "2026-10-30",
+  "scope": "Loaded runtime modules recorded by the benchmark adapters; not a complete source-tree or dependency fingerprint.",
+  "fingerprint": "SHA-256 of UTF-8 lines sorted by source path, each containing file_sha256 + two spaces + source_path + newline.",
+  "angelspec_upstream_revision": "d3412bed231025ea85d35dbf5e0af44f1ac62a5b",
+  "snapshots": [
+    {
+      "framework": "aspec",
+      "git_revision": null,
+      "module_manifest_sha256": "ab820007c8452a4ab36a115afcacf1333118162206ebb9988ca9ef9820ea605d",
+      "module_sha256": {
+        "aspec/controller/loop.py": "ec5232c53b036074936575bc3e222f7157096b4c436069296636ab87dc2787cb",
+        "aspec/controller/training_controller.py": "d8e0f4bc67325c124a76e7e9ab9146113d2139e4eaf3d32a6e19994b10536944",
+        "aspec/data/utils.py": "976bd3a12ad3aa10305b2daf56ed2ac59af0f3d80178c2c7683369d16b2f0962",
+        "aspec/models/dflash.py": "07d9456d8d916db4231a2321a540251e73a014fd3ff1788fcc508f6ecd57fd1c",
+        "aspec/models/dspark.py": "c43537a7bf75455f192e3ffa9852d236b42ac832757b9eb9340e23ba8a2d4d1a",
+        "aspec/models/ops/direct_cp.py": "fc2d61b14486c4a2dcf35494cf9abe40c344d20a25840fcdc833422adb4f2636",
+        "aspec/models/ops/loss.py": "db98036e8da51fdc71129a3c0ab8a2220d77e23328c73d48bffa4d45f6eeb1d4",
+        "aspec/models/ops/output_blocks.py": "7c8562a63d01a17a112a95ee0b0babeb0cd7f463c406de6267d277d0ba96a489",
+        "aspec/models/ops/tiled_l1.py": "61415808ddd75934daa20c21c0eca274631a56b7125a927e43ebc69f524a8b8b",
+        "aspec/training/dflash_trainer.py": "71f112e3bfa897939b3bac800ec476365ab4aa9b5785289cc8982aae47fa646b",
+        "aspec/training/dspark_trainer.py": "d3fe92d76a8f2cddba6f82e2280dea55f1030e8036d6ced58c463356f68e04a5",
+        "aspec/training/optimizer.py": "8b65b3e5d08c7837f8aea93534e300ea04727e931ff97f612e6a74d112e5fbf8",
+        "aspec/training/trainer.py": "588cd3b99b81f4c9f8f4b0f3f812563f15a20af7e779317d949348b5420a80be"
+      },
+      "measurements": [
+        {
+          "boundary": "online",
+          "workload": "8b-4k",
+          "input_tokens_per_second": 77721.37219836004
+        },
+        {
+          "boundary": "online",
+          "workload": "27b-4k",
+          "input_tokens_per_second": 33926.92805800042
+        }
+      ]
+    },
+    {
+      "framework": "aspec",
+      "git_revision": null,
+      "module_manifest_sha256": "2a66be7e800527240c8d3cf3a1d15ded22916f521cc227ce8a420ed481a5e897",
+      "module_sha256": {
+        "aspec/controller/loop.py": "ec5232c53b036074936575bc3e222f7157096b4c436069296636ab87dc2787cb",
+        "aspec/controller/training_controller.py": "8bce1fbc202af49b563ef31eab4887c24cb6f9d013e5eed9c2e9e669f454cf26",
+        "aspec/data/utils.py": "ccc9ae8125397b1473416ab5f9eec509a9a0bea30b956d2e1d9c47495529aab0",
+        "aspec/models/dflash.py": "eae67128a9c891381b759cd393b68a8e8cfcf52510669d800eed5fed00f4f05f",
+        "aspec/models/dspark.py": "7e38640d592900ad55a5f82dd54d193ed891017803a89b8c1c68ba8cce5d2fa9",
+        "aspec/models/ops/direct_cp.py": "fc2d61b14486c4a2dcf35494cf9abe40c344d20a25840fcdc833422adb4f2636",
+        "aspec/models/ops/loss.py": "db98036e8da51fdc71129a3c0ab8a2220d77e23328c73d48bffa4d45f6eeb1d4",
+        "aspec/models/ops/output_blocks.py": "7c8562a63d01a17a112a95ee0b0babeb0cd7f463c406de6267d277d0ba96a489",
+        "aspec/models/ops/tiled_l1.py": "61415808ddd75934daa20c21c0eca274631a56b7125a927e43ebc69f524a8b8b",
+        "aspec/training/dflash_trainer.py": "0f6329bf12cf0e49779072822c8df1e0329321f157243e5a39f32266e1a5354a",
+        "aspec/training/dspark_trainer.py": "d3fe92d76a8f2cddba6f82e2280dea55f1030e8036d6ced58c463356f68e04a5",
+        "aspec/training/optimizer.py": "8b65b3e5d08c7837f8aea93534e300ea04727e931ff97f612e6a74d112e5fbf8",
+        "aspec/training/trainer.py": "bfc73bfbf4bdf674de12f654f24df0830359cd961e6bdc7ccd5c7d91062247e3"
+      },
+      "measurements": [
+        {
+          "boundary": "online",
+          "workload": "8b-128k",
+          "input_tokens_per_second": 121237.14753112955
+        },
+        {
+          "boundary": "online",
+          "workload": "27b-256k",
+          "input_tokens_per_second": 35805.464294540856
+        }
+      ]
+    },
+    {
+      "framework": "angelspec",
+      "git_revision": null,
+      "module_manifest_sha256": "5c318b2e7843b54d8e1538429cab6a9147ed9eba2efaa6a5858f1728dd040459",
+      "module_sha256": {
+        "angelspec/controller/loop.py": "aeb3c595c7f97965f9f47dcdaedd088fce10ca4eed337e337119b32bd22cfcb1",
+        "angelspec/controller/training_controller.py": "ff12f36c5d342ef6b584949af728e2d6cf90270d400d698007e2025cd094b13d",
+        "angelspec/data/utils.py": "c00f3c95650af509574ae88929a30f2e91f5b8742df4125769242a21f557dd29",
+        "angelspec/training/dflash_trainer.py": "8f6ca26a5bf05f9096655d682db7ef4dc53b58100af507c25014fc741ce6ab60",
+        "angelspec/training/dspark_trainer.py": "a1f9cf9a0c35f8db08eab882bcb11567e40a9de07ebcccd10f4fd1bf3f3bab95",
+        "angelspec/training/trainer.py": "e1c8b9e3caa83ca94441584b033e2aa649b792bebd27f655a928f21f04f3c1ba"
+      },
+      "measurements": [
+        {
+          "boundary": "online",
+          "workload": "8b-4k",
+          "input_tokens_per_second": 28952.966641094277
+        },
+        {
+          "boundary": "online",
+          "workload": "27b-4k",
+          "input_tokens_per_second": 18593.3101998299
+        },
+        {
+          "boundary": "online",
+          "workload": "8b-128k",
+          "input_tokens_per_second": 73561.62515165342
+        }
+      ]
+    },
+    {
+      "framework": "aspec",
+      "git_revision": null,
+      "module_manifest_sha256": "cd7afb6d57a5169003538d763d7c20a11b4f60a8375c82e3ee82f0f0de2efa6e",
+      "module_sha256": {
+        "aspec/data/utils.py": "ccc9ae8125397b1473416ab5f9eec509a9a0bea30b956d2e1d9c47495529aab0",
+        "aspec/kernels/cutedsl/_primitives.py": "accedc3b271e0aa707fe62eaa8b7037ae520734d5718bc09389ae894fa45a21b",
+        "aspec/kernels/cutedsl/dspark_qk_norm_rope.py": "5db02ed7939ee0dc044e81884d817e5f1b6c917b6c8296c232f976f85a6275fc",
+        "aspec/kernels/cutedsl/dspark_qk_norm_rope_bwd.py": "19fec37e36ab954830197e1d5ce6f65d55659f1a9979983436fbbfc998dc12dd",
+        "aspec/models/dflash.py": "eae67128a9c891381b759cd393b68a8e8cfcf52510669d800eed5fed00f4f05f",
+        "aspec/models/draft/dflash.py": "04fdda988c7f49a6205538d22989b159d5c59369b44b468583101a65f214c89c",
+        "aspec/models/draft/dspark.py": "010a48aa2d05de2bde44e35514b6a91a31180dfbb4657af030e776e1f7370bc3",
+        "aspec/models/dspark.py": "7e38640d592900ad55a5f82dd54d193ed891017803a89b8c1c68ba8cce5d2fa9",
+        "aspec/models/ops/cudnn_flex_attention.py": "0edf0aca1770a3717e6be7c9b29efc5a73194dff7b5d90b8ab3c61679a26824c",
+        "aspec/models/ops/direct_cp.py": "fc2d61b14486c4a2dcf35494cf9abe40c344d20a25840fcdc833422adb4f2636",
+        "aspec/models/ops/dspark_qk_norm_rope.py": "a7d875d05ad84817f71d936fb56e5e67031067bd09bf601a92df9f75af4f3e63",
+        "aspec/models/ops/gradient_scaling.py": "2c611d12c671c9771a97092423b39789cef55111e961faaefdacfb95ecfc8ab2",
+        "aspec/models/ops/loss.py": "db98036e8da51fdc71129a3c0ab8a2220d77e23328c73d48bffa4d45f6eeb1d4",
+        "aspec/models/ops/output_blocks.py": "7c8562a63d01a17a112a95ee0b0babeb0cd7f463c406de6267d277d0ba96a489",
+        "aspec/models/ops/tiled_l1.py": "61415808ddd75934daa20c21c0eca274631a56b7125a927e43ebc69f524a8b8b",
+        "aspec/training/dflash_trainer.py": "0f6329bf12cf0e49779072822c8df1e0329321f157243e5a39f32266e1a5354a",
+        "aspec/training/dspark_trainer.py": "d3fe92d76a8f2cddba6f82e2280dea55f1030e8036d6ced58c463356f68e04a5",
+        "aspec/training/fsdp.py": "c783d8a030d9d6ecd8b105422e9ba769d4e7d6e85151f416c682ec9fbdf0bb87",
+        "aspec/training/optimizer.py": "8b65b3e5d08c7837f8aea93534e300ea04727e931ff97f612e6a74d112e5fbf8",
+        "aspec/training/trainer.py": "bfc73bfbf4bdf674de12f654f24df0830359cd961e6bdc7ccd5c7d91062247e3"
+      },
+      "measurements": [
+        {
+          "boundary": "resident",
+          "workload": "8b-4k",
+          "input_tokens_per_second": 15256.441995459423
+        },
+        {
+          "boundary": "resident",
+          "workload": "8b-128k",
+          "input_tokens_per_second": 288380.5191044294
+        },
+        {
+          "boundary": "resident",
+          "workload": "27b-4k",
+          "input_tokens_per_second": 9573.416606837533
+        },
+        {
+          "boundary": "resident",
+          "workload": "27b-256k",
+          "input_tokens_per_second": 229232.34290544046
+        }
+      ]
+    },
+    {
+      "framework": "angelspec",
+      "git_revision": null,
+      "module_manifest_sha256": "d192c081558d3503c316f78f294f652e717abbd7de10f6ce2ac34e21269e0feb",
+      "module_sha256": {
+        "angelspec/data/utils.py": "c00f3c95650af509574ae88929a30f2e91f5b8742df4125769242a21f557dd29",
+        "angelspec/models/dflash.py": "e48653ce0761d8e1f0f0282d65a834fac265b859c4a71b95869b1e320d293e62",
+        "angelspec/models/draft/dflash.py": "0edf0ed93c98a82d251fedf40eaf9e802dbfb5ed2c76f2277566f1cf7c7fb67d",
+        "angelspec/models/draft/dspark.py": "666b34ca0fdaaab6eeae1a419e2b5a15020f876d1acc607dc19134468bf06eae",
+        "angelspec/models/dspark.py": "9a696812fd8cb9fc1fd8480675b089b587ddf0238c52ff4f0459213face28b92",
+        "angelspec/training/dflash_trainer.py": "8f6ca26a5bf05f9096655d682db7ef4dc53b58100af507c25014fc741ce6ab60",
+        "angelspec/training/dspark_trainer.py": "a1f9cf9a0c35f8db08eab882bcb11567e40a9de07ebcccd10f4fd1bf3f3bab95",
+        "angelspec/training/fsdp.py": "6c47ead38c93a9e2c23230f44cfaf073a840f35d3848b2f106e4217b12da24a2",
+        "angelspec/training/optimizer.py": "ba47f8ef8912cb1afda75f0b470a293ff30fa36eb1f99fcdded805860ebfd1ed",
+        "angelspec/training/trainer.py": "e1c8b9e3caa83ca94441584b033e2aa649b792bebd27f655a928f21f04f3c1ba"
+      },
+      "measurements": [
+        {
+          "boundary": "resident",
+          "workload": "8b-4k",
+          "input_tokens_per_second": 6155.937385221243
+        },
+        {
+          "boundary": "resident",
+          "workload": "8b-128k",
+          "input_tokens_per_second": 125672.09450485156
+        },
+        {
+          "boundary": "resident",
+          "workload": "27b-4k",
+          "input_tokens_per_second": 3996.075552554823
+        }
+      ]
+    }
+  ]
+}

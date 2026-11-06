@@ -1,0 +1,140 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1440" viewBox="0 0 1800 1440" role="img" aria-labelledby="title desc">
+<title id="title">Packed THD: why a generic mask raises register pressure</title>
+<desc id="desc">White-background comparison. The tested FA4 callback reconstructs logical coordinates and combines eight metadata inputs while scores are live. cuDNN precomputes consumer-aligned predicates and loads compact words. Conceptual register bars show how extra live state can spill. NCU measurements are shown separately; THD itself is not the cause.</desc>
+<metadata>Original explanatory artwork. Copyright 2026 Ant Group Co., Ltd. SPDX-License-Identifier: Apache-2.0. NCU evidence: aspec-five-attn-20261105-61550139. Register-capacity bars are schematic, not measured allocation counts.</metadata>
+<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L6,3 L0,6" fill="#82919B"/></marker></defs>
+<style>text{font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;font-weight:300}.mono{font-family:Menlo,Consolas,monospace;font-weight:400}</style>
+<rect x="0" y="0" width="1800" height="1440" rx="0" fill="#FFFFFF" stroke="none" stroke-width="1.25"/>
+<text x="64" y="49" font-size="17" fill="#61717D" font-weight="400" text-anchor="start">ASPEC  /  MASK CONSUMPTION &amp; REGISTER PRESSURE</text>
+<text x="64" y="108" font-size="48" fill="#26394A" font-weight="300" text-anchor="start">Packed THD: the cost of a generic mask</text>
+<text x="64" y="149" font-size="23" fill="#61717D" font-weight="300" text-anchor="start">Same visibility · 128K context · B=7 · Hq/Hkv=32/8 · D=128 · BF16 tensors / FP32 accumulation</text>
+<rect x="64" y="184" width="1672" height="137" rx="10" fill="#FFFFFF" stroke="#D8E0E5" stroke-width="1.25"/>
+<text x="88" y="220" font-size="17" fill="#61717D" font-weight="400" text-anchor="start">PACKED TOKEN STORAGE</text>
+<text x="88" y="260" font-size="23" fill="#567CAB" font-weight="400" text-anchor="start">Q</text>
+<text x="88" y="300" font-size="23" fill="#567CAB" font-weight="400" text-anchor="start">KV</text>
+<rect x="150" y="234" width="200" height="37" rx="5" fill="#F1F5FA" stroke="#567CAB" stroke-width="1.25"/>
+<text x="250.0" y="259" font-size="19" fill="#567CAB" font-weight="300" text-anchor="middle">A · draft 0</text>
+<rect x="360" y="234" width="200" height="37" rx="5" fill="#F1F5FA" stroke="#567CAB" stroke-width="1.25"/>
+<text x="460.0" y="259" font-size="19" fill="#567CAB" font-weight="300" text-anchor="middle">A · draft 1</text>
+<rect x="570" y="234" width="200" height="37" rx="5" fill="#F6F3FA" stroke="#8A79A8" stroke-width="1.25"/>
+<text x="670.0" y="259" font-size="19" fill="#8A79A8" font-weight="300" text-anchor="middle">B · draft 0</text>
+<rect x="150" y="274" width="220" height="37" rx="5" fill="#F1F5FA" stroke="#567CAB" stroke-width="1.25"/>
+<text x="260.0" y="299" font-size="19" fill="#567CAB" font-weight="300" text-anchor="middle">A · context</text>
+<rect x="380" y="274" width="200" height="37" rx="5" fill="#F1F5FA" stroke="#567CAB" stroke-width="1.25"/>
+<text x="480.0" y="299" font-size="19" fill="#567CAB" font-weight="300" text-anchor="middle">A · drafts</text>
+<rect x="590" y="274" width="220" height="37" rx="5" fill="#F6F3FA" stroke="#8A79A8" stroke-width="1.25"/>
+<text x="700.0" y="299" font-size="19" fill="#8A79A8" font-weight="300" text-anchor="middle">B · context</text>
+<rect x="820" y="274" width="200" height="37" rx="5" fill="#F6F3FA" stroke="#8A79A8" stroke-width="1.25"/>
+<text x="920.0" y="299" font-size="19" fill="#8A79A8" font-weight="300" text-anchor="middle">B · drafts</text>
+<text x="1092" y="256" font-size="23" fill="#26394A" font-weight="300" text-anchor="start">Flat indices need a semantic mapping.</text>
+<text x="1092" y="292" font-size="21" fill="#61717D" font-weight="300" text-anchor="start">THD itself does not force expensive masking.</text>
+<path d="M900,355 L900,997" fill="none" stroke="#D8E0E5" stroke-width="1.5"/>
+<text x="80" y="379" font-size="31" fill="#BE7038" font-weight="400" text-anchor="start">FA4 · tested generic mask callback</text>
+<text x="960" y="379" font-size="31" fill="#15857A" font-weight="400" text-anchor="start">cuDNN Flex · planned predicates</text>
+<text x="80" y="414" font-size="22" fill="#61717D" font-weight="300" text-anchor="start">Reconstruct relations while consuming scores</text>
+<text x="960" y="414" font-size="22" fill="#61717D" font-weight="300" text-anchor="start">Resolve relations before the attention main kernel</text>
+<rect x="80" y="443" width="760" height="91" rx="9" fill="#FFFFFF" stroke="#BE7038" stroke-width="1.25"/>
+<text x="104" y="477" font-size="22" fill="#26394A" font-weight="300" text-anchor="start">Logical coordinates from tile / fragment coordinates</text>
+<text x="104" y="510" font-size="20" fill="#61717D" font-weight="300" text-anchor="start">q, k, head · GQA mapping · bounds · address arithmetic</text>
+<rect x="960" y="443" width="760" height="91" rx="9" fill="#FFFFFF" stroke="#15857A" stroke-width="1.25"/>
+<text x="984" y="477" font-size="22" fill="#26394A" font-weight="300" text-anchor="start">Row intervals → MaskPlan</text>
+<text x="984" y="510" font-size="20" fill="#61717D" font-weight="300" text-anchor="start">Packed bits follow the consumer’s score-register order.</text>
+<path d="M460,546 L460,565" fill="none" stroke="#BE7038" stroke-width="1.5" marker-end="url(#arrow)"/>
+<path d="M1340,546 L1340,565" fill="none" stroke="#15857A" stroke-width="1.5" marker-end="url(#arrow)"/>
+<rect x="80" y="580" width="760" height="144" rx="9" fill="#FFFFFF" stroke="#BE7038" stroke-width="1.25"/>
+<text x="104" y="612" font-size="19" fill="#61717D" font-weight="400" text-anchor="start">Q</text>
+<text x="104" y="659" font-size="19" fill="#61717D" font-weight="400" text-anchor="start">K</text>
+<rect x="144" y="588" width="151" height="37" rx="5" fill="#FFF9F3" stroke="#BE7038" stroke-width="1.25"/>
+<text x="219.5" y="613" font-size="19" fill="#BE7038" font-weight="300" text-anchor="middle">sample</text>
+<rect x="309" y="588" width="151" height="37" rx="5" fill="#FFF9F3" stroke="#BE7038" stroke-width="1.25"/>
+<text x="384.5" y="613" font-size="19" fill="#BE7038" font-weight="300" text-anchor="middle">block</text>
+<rect x="474" y="588" width="151" height="37" rx="5" fill="#FFF9F3" stroke="#BE7038" stroke-width="1.25"/>
+<text x="549.5" y="613" font-size="19" fill="#BE7038" font-weight="300" text-anchor="middle">keep</text>
+<rect x="639" y="588" width="151" height="37" rx="5" fill="#FFF9F3" stroke="#BE7038" stroke-width="1.25"/>
+<text x="714.5" y="613" font-size="19" fill="#BE7038" font-weight="300" text-anchor="middle">anchor</text>
+<rect x="144" y="635" width="151" height="37" rx="5" fill="#FFF9F3" stroke="#BE7038" stroke-width="1.25"/>
+<text x="219.5" y="660" font-size="19" fill="#BE7038" font-weight="300" text-anchor="middle">sample</text>
+<rect x="309" y="635" width="151" height="37" rx="5" fill="#FFF9F3" stroke="#BE7038" stroke-width="1.25"/>
+<text x="384.5" y="660" font-size="19" fill="#BE7038" font-weight="300" text-anchor="middle">block</text>
+<rect x="474" y="635" width="151" height="37" rx="5" fill="#FFF9F3" stroke="#BE7038" stroke-width="1.25"/>
+<text x="549.5" y="660" font-size="19" fill="#BE7038" font-weight="300" text-anchor="middle">keep</text>
+<rect x="639" y="635" width="151" height="37" rx="5" fill="#FFF9F3" stroke="#BE7038" stroke-width="1.25"/>
+<text x="714.5" y="660" font-size="19" fill="#BE7038" font-weight="300" text-anchor="middle">position</text>
+<text x="104" y="708" font-size="20" fill="#BE7038" font-weight="300" text-anchor="start">same document AND valid AND (context prefix OR own draft)</text>
+<rect x="960" y="580" width="760" height="144" rx="9" fill="#FFFFFF" stroke="#15857A" stroke-width="1.25"/>
+<rect x="984" y="596" width="194" height="43" rx="5" fill="#F5FBF9" stroke="#15857A" stroke-width="1.25"/>
+<text x="1081.0" y="625" font-size="20" fill="#15857A" font-weight="300" text-anchor="middle">GMEM payload</text>
+<rect x="1223" y="596" width="194" height="43" rx="5" fill="#F5FBF9" stroke="#15857A" stroke-width="1.25"/>
+<text x="1320.0" y="625" font-size="20" fill="#15857A" font-weight="300" text-anchor="middle">SMEM staging</text>
+<rect x="1462" y="596" width="234" height="43" rx="5" fill="#F5FBF9" stroke="#15857A" stroke-width="1.25"/>
+<text x="1579.0" y="625" font-size="20" fill="#15857A" font-weight="300" text-anchor="middle">register words</text>
+<path d="M1185,618 L1212,618" fill="none" stroke="#15857A" stroke-width="1.5" marker-end="url(#arrow)"/>
+<path d="M1424,618 L1451,618" fill="none" stroke="#15857A" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="984" y="673" font-size="21" fill="#26394A" font-weight="300" text-anchor="start">Read the current payload; select score or −∞ from each bit.</text>
+<text x="984" y="708" font-size="20" fill="#15857A" font-weight="300" text-anchor="start">No per-score sample / block / keep relation reconstruction.</text>
+<text x="80" y="765" font-size="17" fill="#61717D" font-weight="400" text-anchor="start">LIVE AT THE MASK STEP</text>
+<text x="960" y="765" font-size="17" fill="#61717D" font-weight="400" text-anchor="start">LIVE AT THE MASK STEP</text>
+<text x="80" y="799" font-size="22" fill="#26394A" font-weight="300" text-anchor="start">Scores + softmax / traversal state + generic mask state</text>
+<text x="960" y="799" font-size="22" fill="#26394A" font-weight="300" text-anchor="start">Scores + softmax / traversal state + compact mask words</text>
+<text x="80" y="836" font-size="18" fill="#61717D" font-weight="300" text-anchor="start">Illustrative per-thread register budget</text>
+<rect x="80" y="851" width="650" height="48" rx="3" fill="#FFFFFF" stroke="#D8E0E5" stroke-width="1.25"/>
+<rect x="82" y="853" width="205" height="44" rx="1" fill="#E7EEF6" stroke="none" stroke-width="1.25"/>
+<rect x="287" y="853" width="145" height="44" rx="1" fill="#F0EDF5" stroke="none" stroke-width="1.25"/>
+<text x="184" y="883" font-size="19" fill="#567CAB" font-weight="300" text-anchor="middle">score fragment</text>
+<text x="360" y="883" font-size="18" fill="#8A79A8" font-weight="300" text-anchor="middle">other live state</text>
+<text x="960" y="836" font-size="18" fill="#61717D" font-weight="300" text-anchor="start">Illustrative per-thread register budget</text>
+<rect x="960" y="851" width="650" height="48" rx="3" fill="#FFFFFF" stroke="#D8E0E5" stroke-width="1.25"/>
+<rect x="962" y="853" width="205" height="44" rx="1" fill="#E7EEF6" stroke="none" stroke-width="1.25"/>
+<rect x="1167" y="853" width="145" height="44" rx="1" fill="#F0EDF5" stroke="none" stroke-width="1.25"/>
+<text x="1064" y="883" font-size="19" fill="#567CAB" font-weight="300" text-anchor="middle">score fragment</text>
+<text x="1240" y="883" font-size="18" fill="#8A79A8" font-weight="300" text-anchor="middle">other live state</text>
+<rect x="432" y="853" width="379" height="44" rx="1" fill="#FAE7D8" stroke="none" stroke-width="1.25"/>
+<text x="600" y="883" font-size="18" fill="#BE7038" font-weight="300" text-anchor="middle">indices + metadata + temporaries</text>
+<path d="M730,839 L730,909" fill="none" stroke="#BE7038" stroke-width="1.5" stroke-dasharray="5 5"/>
+<text x="741" y="833" font-size="16" fill="#BE7038" font-weight="300" text-anchor="start">capacity</text>
+<path d="M785,908 L785,946 L681,946" fill="none" stroke="#BE7038" stroke-width="1.5" marker-end="url(#arrow)"/>
+<rect x="80" y="926" width="570" height="63" rx="7" fill="#FFFFFF" stroke="#BE7038" stroke-width="1.25"/>
+<text x="104" y="951" font-size="21" fill="#BE7038" font-weight="300" text-anchor="start">Spill / reload via thread-private local memory</text>
+<text x="104" y="977" font-size="19" fill="#61717D" font-weight="300" text-anchor="start">Extra instructions, cache traffic and dependencies</text>
+<rect x="1312" y="853" width="112" height="44" rx="1" fill="#DDF1EA" stroke="none" stroke-width="1.25"/>
+<text x="1368" y="883" font-size="18" fill="#15857A" font-weight="300" text-anchor="middle">mask bits</text>
+<text x="1501" y="883" font-size="18" fill="#61717D" font-weight="300" text-anchor="middle">headroom</text>
+<rect x="960" y="926" width="760" height="63" rx="7" fill="#FFFFFF" stroke="#15857A" stroke-width="1.25"/>
+<text x="984" y="951" font-size="21" fill="#15857A" font-weight="300" text-anchor="start">Small, regular mask state fits the tested kernel’s budget.</text>
+<text x="984" y="977" font-size="19" fill="#61717D" font-weight="300" text-anchor="start">No local-memory traffic observed in this captured main kernel.</text>
+<text x="80" y="1035" font-size="17" fill="#61717D" font-weight="400" text-anchor="start">NCU: FORWARD MAIN ONLY — NOT COMPLETE ATTENTION F+B</text>
+<rect x="80" y="1055" width="396" height="127" rx="8" fill="#FFFFFF" stroke="#D8E0E5" stroke-width="1.25"/>
+<text x="98" y="1084" font-size="19" fill="#61717D" font-weight="300" text-anchor="start">Integer thread instructions</text>
+<text x="98" y="1127" font-size="31" fill="#BE7038" font-weight="300" text-anchor="start">57.21 B</text>
+<text x="265" y="1127" font-size="26" fill="#61717D" font-weight="300" text-anchor="start">→</text>
+<text x="307" y="1127" font-size="31" fill="#15857A" font-weight="300" text-anchor="start">2.34 B</text>
+<text x="98" y="1160" font-size="17" fill="#BE7038" font-weight="300" text-anchor="start">FA4 generic</text>
+<text x="307" y="1160" font-size="17" fill="#15857A" font-weight="300" text-anchor="start">cuDNN</text>
+<rect x="500" y="1055" width="396" height="127" rx="8" fill="#FFFFFF" stroke="#D8E0E5" stroke-width="1.25"/>
+<text x="518" y="1084" font-size="19" fill="#61717D" font-weight="300" text-anchor="start">Local load + store requests</text>
+<text x="518" y="1127" font-size="31" fill="#BE7038" font-weight="300" text-anchor="start">12.34 GB</text>
+<text x="685" y="1127" font-size="26" fill="#61717D" font-weight="300" text-anchor="start">→</text>
+<text x="727" y="1127" font-size="31" fill="#15857A" font-weight="300" text-anchor="start">0</text>
+<text x="518" y="1160" font-size="17" fill="#BE7038" font-weight="300" text-anchor="start">FA4 generic</text>
+<text x="727" y="1160" font-size="17" fill="#15857A" font-weight="300" text-anchor="start">cuDNN</text>
+<rect x="920" y="1055" width="396" height="127" rx="8" fill="#FFFFFF" stroke="#D8E0E5" stroke-width="1.25"/>
+<text x="938" y="1084" font-size="19" fill="#61717D" font-weight="300" text-anchor="start">Tensor pipe active</text>
+<text x="938" y="1127" font-size="31" fill="#BE7038" font-weight="300" text-anchor="start">12.22%</text>
+<text x="1105" y="1127" font-size="26" fill="#61717D" font-weight="300" text-anchor="start">→</text>
+<text x="1147" y="1127" font-size="31" fill="#15857A" font-weight="300" text-anchor="start">74.22%</text>
+<text x="938" y="1160" font-size="17" fill="#BE7038" font-weight="300" text-anchor="start">FA4 generic</text>
+<text x="1147" y="1160" font-size="17" fill="#15857A" font-weight="300" text-anchor="start">cuDNN</text>
+<rect x="1340" y="1055" width="396" height="127" rx="8" fill="#FFFFFF" stroke="#D8E0E5" stroke-width="1.25"/>
+<text x="1358" y="1084" font-size="19" fill="#61717D" font-weight="300" text-anchor="start">Forward main only</text>
+<text x="1358" y="1127" font-size="31" fill="#BE7038" font-weight="300" text-anchor="start">23.86 ms</text>
+<text x="1525" y="1127" font-size="26" fill="#61717D" font-weight="300" text-anchor="start">→</text>
+<text x="1567" y="1127" font-size="31" fill="#15857A" font-weight="300" text-anchor="start">4.37 ms</text>
+<text x="1358" y="1160" font-size="17" fill="#BE7038" font-weight="300" text-anchor="start">FA4 generic</text>
+<text x="1567" y="1160" font-size="17" fill="#15857A" font-weight="300" text-anchor="start">cuDNN</text>
+<text x="80" y="1226" font-size="23" fill="#26394A" font-weight="300" text-anchor="start">Tensor work is close: 6.532 T vs 6.149 T operations — only 6.21% more in FA4.</text>
+<rect x="80" y="1251" width="1640" height="63" rx="8" fill="#FFFFFF" stroke="#D8E0E5" stroke-width="1.25"/>
+<text x="102" y="1291" font-size="22" fill="#26394A" font-weight="300" text-anchor="start">Paired attention F+B: FA4 48.59 ms → interval 30.16 ms; native cuDNN 21.15 ms.</text>
+<text x="80" y="1352" font-size="19" fill="#61717D" font-weight="300" text-anchor="start">Register bars are schematic, not measured register counts. Local requests are not HBM bytes or spill-buffer capacity.</text>
+<text x="80" y="1383" font-size="19" fill="#61717D" font-weight="300" text-anchor="start">Native and patched cuDNN share this forward. Joint-GQA optimization targets backward; its counters are separate.</text>
+<text x="80" y="1414" font-size="19" fill="#61717D" font-weight="300" text-anchor="start">Plan construction excluded. NCU forward-main and graph F+B timings are separate; not training E2E.</text>
+</svg>

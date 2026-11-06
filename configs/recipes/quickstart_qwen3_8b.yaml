@@ -1,0 +1,71 @@
+# Two-GPU functional smoke, not a training-quality or performance recipe.
+model:
+  target_model_path: ${oc.env:ASPEC_TARGET_MODEL,Qwen/Qwen3-8B}
+  native_context_length: 32768
+  trust_remote_code: true
+  draft_model_config: aspec/config/dspark_draft_config.json
+dataset:
+  train_data_path: ../../examples/data/sample_conversations.jsonl
+  chat_template: qwen3-instruct
+  prompt_key: conversations
+  min_loss_tokens: 14
+training:
+  attention_backend: cudnn_flex_attention
+  micro_batch_size: 1
+  draft_accumulation_steps: 4
+  training_num_gpus_per_node: 1
+  training_num_nodes: 1
+  fsdp_strategy: REPLICATE
+  fsdp_reduce_dtype: bfloat16
+  max_seq_length: 1024
+  num_epochs: 3
+  num_train_steps: 8
+  lr_total_steps: 8
+  learning_rate: 6e-4
+  min_lr: 6e-5
+  warmup_ratio: 0.0
+  seed: 42
+  prefetch_depth: 1
+  max_concurrent_batches: 1
+  streaming_dispatch_with_training: true
+  pipeline_dispatch_with_training: true
+  save_interval: 4
+  save_per_epoch: false
+  save_final_checkpoint: true
+  max_checkpoints: 2
+  dflash_block_size: 7
+  dspark_num_anchors: 64
+  dspark_num_target_layers: 5
+inference:
+  inference_engine_type: sgl
+  store_last_hidden_states: true
+  target_prefill_memory_optimized: true
+  inference_num_gpus: 1
+  inference_num_gpus_per_engine: 1
+  inference_num_gpus_per_node: 2
+  inference_batch_size: 2
+  inference_fetch_batch: 4
+  inference_buffer_threshold: 4
+  max_sample_pool_size: 8
+  sglang:
+    tp_size: 1
+    mem_fraction_static: 0.5
+mooncake:
+  data_plane: transfer_engine
+  protocol: nvlink_intra
+  require_nvlink: true
+  enable_gpu_direct: true
+  allow_host_fallback: false
+  enable_hard_pin: true
+  max_seq_len: 1024
+  hidden_dim: 4096
+  source_gpu_ring_slots: 12
+  destination_gpu_ring_slots: 1
+  gpu_ring_slots: 12
+  host_buffer_size: 2GB
+  global_segment_size: 8GB
+  local_buffer_size: 2GB
+logging:
+  report_to: none
+output_dir: outputs/quickstart
+cache_dir: cache/quickstart

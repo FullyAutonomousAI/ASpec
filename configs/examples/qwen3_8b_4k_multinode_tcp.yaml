@@ -1,0 +1,142 @@
+# MIT License
+#
+# Copyright (c) 2026 LightSeek Foundation
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+# Adapted from the TorchSpec configuration examples at 6c042a87140a84d13839e341ece2c5c3ada918bc.
+# ASpec updates schema bindings, portable inputs and execution settings.
+
+# Supplementary configuration example; see the support matrix for supported workflows.
+# Inspect its inputs, step limits and support boundary before use.
+# Adapted from TorchSpec 6c042a87140a84d13839e341ece2c5c3ada918bc (MIT).
+# Two-node Qwen3-8B / DSpark 4K reference, adapted from the retained TorchSpec MIT recipe.
+# Set ASPEC_TRAINING_NODE_IP, ASPEC_INFERENCE_NODE_IP and ASPEC_TRAIN_DATA.
+# Connect RAY_ADDRESS to an existing two-node cluster. No CPU thread overrides.
+# The 13-step window is for bounded performance validation, not model quality.
+# This role-separated Store/TCP lane is a compatibility and control path. On
+# NVLink-connected nodes prefer qwen3_8b_4k_multinode_node_local_nvlink.yaml.
+
+model:
+  target_model_path: Qwen/Qwen3-8B
+  native_context_length: 32768
+  trust_remote_code: false
+  draft_model_config: aspec/config/dspark_draft_config.json
+
+dataset:
+  train_data_path: ${oc.env:ASPEC_TRAIN_DATA}
+  eval_data_path: null
+  chat_template: null
+  shuffle_dataset: false
+  min_loss_tokens: 32
+
+training:
+  attention_backend: cudnn_flex_attention
+  draft_context_parallel_size: 1
+  micro_batch_size: 1
+  draft_accumulation_steps: 64
+  learning_rate: 6e-4
+  min_lr: 6e-5
+  weight_decay: 0.0
+  max_concurrent_batches: 1
+  streaming_dispatch_with_training: true
+  pipeline_dispatch_with_training: true
+  max_grad_norm: 1.0
+  max_seq_length: 4096
+  num_epochs: 100
+  num_train_steps: 13
+  lr_total_steps: 13
+  seed: 42
+  training_num_gpus_per_node: 8
+  training_num_nodes: 1
+  placement_strategy: custom
+  training_node_ips: ["${oc.env:ASPEC_TRAINING_NODE_IP}"]
+  ttt_length: 7
+  # Replication avoids parameter all-gathers and matches the official
+  # DeepSpec no-shard setup.
+  fsdp_strategy: REPLICATE
+  fsdp_reduce_dtype: bfloat16
+  prefetch_depth: 1
+  save_interval: 0
+  save_per_epoch: false
+  save_final_checkpoint: false
+  warmup_ratio: 0.04
+  dflash_block_size: 7
+  dflash_packing: false
+  dspark_num_anchors: 512
+  dspark_num_target_layers: 5
+  dspark_loss_decay_gamma: 4.0
+  dspark_ce_loss_alpha: 0.1
+  dspark_l1_loss_alpha: 0.9
+  dspark_confidence_head_alpha: 1.0
+
+inference:
+  inference_engine_type: sgl
+  store_last_hidden_states: true
+  target_prefill_memory_optimized: false
+  inference_num_gpus: 8
+  inference_num_gpus_per_engine: 1
+  inference_num_gpus_per_node: 8
+  inference_node_ips: ["${oc.env:ASPEC_INFERENCE_NODE_IP}"]
+  inference_fetch_batch: 8
+  inference_buffer_threshold: 16
+  max_sample_pool_size: 512
+  inference_batch_size: 2
+  sglang:
+    tp_size: 1
+    mem_fraction_static: 0.5
+    extra_args:
+      max_running_requests: 2
+      max_total_tokens: 8704
+      max_prefill_tokens: 8704
+
+mooncake:
+  master_server_address: null
+  metadata_server: null
+  data_plane: store
+  protocol: tcp
+  enable_gpu_direct: false
+  allow_host_fallback: false
+  global_segment_size: 32GB
+  local_buffer_size: 8GB
+  host_buffer_size: 1GB
+  async_put_pool_size: 1
+  # Published features are owned work, not evictable cache. GET/discard force-removes them.
+  enable_hard_pin: true
+  max_seq_len: 4096
+  hidden_dim: 4096
+  kv_lease_ttl_s: 60
+  get_retry_max_wait_seconds: 600
+
+cluster:
+  mode: static_multi_node
+  shared_root: ${oc.env:ASPEC_SHARED_ROOT}
+  require_homogeneous_gpus: true
+
+logging:
+  report_to: none
+
+debug:
+  enable_perf_metrics: true
+  performance_measurement_required: true
+  performance_warmup_steps: 2
+  performance_drain_steps: 1
+
+output_dir: ${oc.env:ASPEC_SHARED_ROOT}/aspec_runs/qwen3-8b-4k-tcp
+cache_dir: ${oc.env:ASPEC_SHARED_ROOT}/aspec_cache/qwen3-8b-4k-tcp

@@ -1,0 +1,139 @@
+{
+  "quickstart": {
+    "configs": [
+      "configs/recipes/quickstart_qwen3_8b.yaml"
+    ],
+    "model": "Qwen3-8B",
+    "nodes": 1,
+    "gpus": 2,
+    "target_gpus": 1,
+    "draft_gpus": 1,
+    "native_only_export": false
+  },
+  "dspark": {
+    "configs": [
+      "configs/recipes/qwen3_8b_dspark.yaml"
+    ],
+    "model": "Qwen3-8B",
+    "nodes": 1,
+    "gpus": 8,
+    "target_gpus": 4,
+    "draft_gpus": 4,
+    "native_only_export": false
+  },
+  "dflash": {
+    "configs": [
+      "configs/recipes/qwen3_8b_dflash.yaml"
+    ],
+    "model": "Qwen3-8B",
+    "nodes": 1,
+    "gpus": 3,
+    "target_gpus": 1,
+    "draft_gpus": 2,
+    "native_only_export": false
+  },
+  "eagle3": {
+    "configs": [
+      "configs/recipes/qwen3_8b_eagle3.yaml"
+    ],
+    "model": "Qwen3-8B",
+    "nodes": 1,
+    "gpus": 3,
+    "target_gpus": 1,
+    "draft_gpus": 2,
+    "native_only_export": false
+  },
+  "eagle4": {
+    "configs": [
+      "configs/recipes/qwen3_8b_eagle4.yaml",
+      "configs/recipes/qwen3_8b_eagle4_candidate.yaml"
+    ],
+    "model": "Qwen3-8B",
+    "nodes": 1,
+    "gpus": 3,
+    "target_gpus": 1,
+    "draft_gpus": 2,
+    "native_only_export": true
+  },
+  "native-mtp": {
+    "configs": [
+      "configs/recipes/qwen3_5_9b_mtp.yaml"
+    ],
+    "model": "Qwen3.5-9B",
+    "nodes": 1,
+    "gpus": 3,
+    "target_gpus": 1,
+    "draft_gpus": 2,
+    "native_only_export": true
+  },
+  "ling-tiny": {
+    "configs": [
+      "configs/recipes/ling3_tiny_dspark.yaml"
+    ],
+    "model": "Ling-3.0-tiny",
+    "nodes": 1,
+    "gpus": 2,
+    "target_gpus": 1,
+    "draft_gpus": 1,
+    "native_only_export": false
+  },
+  "ling-flash": {
+    "configs": [
+      "configs/recipes/ling3_flash_dspark.yaml"
+    ],
+    "model": "Ling-3.0-flash",
+    "nodes": 1,
+    "gpus": 3,
+    "target_gpus": 2,
+    "draft_gpus": 1,
+    "native_only_export": false
+  },
+  "ling-flash31": {
+    "configs": [
+      "configs/recipes/ling31_flash_mla_moe_dspark.yaml"
+    ],
+    "model": "Ling-3.1-flash",
+    "nodes": 1,
+    "gpus": 8,
+    "target_gpus": 4,
+    "draft_gpus": 4,
+    "native_only_export": true,
+    "environment": {
+      "SGLANG_JIT_DEEPGEMM_FAST_WARMUP": "1"
+    }
+  },
+  "shared-target": {
+    "configs": [
+      "configs/recipes/qwen3_8b_4k_multi_draft_nvlink.yaml"
+    ],
+    "model": "Qwen3-8B",
+    "nodes": 1,
+    "gpus": 8,
+    "target_gpus": 4,
+    "draft_gpus": 4,
+    "native_only_export": false
+  },
+  "qwen27b-long": {
+    "configs": [
+      "configs/recipes/qwen3_8_27b_256k_fa4_cp2_nvlink.yaml"
+    ],
+    "model": "Qwen3.8-27B",
+    "nodes": 1,
+    "gpus": 8,
+    "target_gpus": 6,
+    "draft_gpus": 2,
+    "minimum_input_tokens": 261888,
+    "native_only_export": false
+  },
+  "multinode": {
+    "configs": [
+      "configs/recipes/qwen3_8b_4k_multinode_node_local_nvlink.yaml"
+    ],
+    "model": "Qwen3-8B",
+    "nodes": 2,
+    "gpus": 16,
+    "target_gpus": 8,
+    "draft_gpus": 8,
+    "native_only_export": false
+  }
+}

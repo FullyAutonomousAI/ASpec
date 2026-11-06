@@ -1,0 +1,15 @@
+# CPU-only public CI dependencies. The production CUDA lane remains pinned in
+# requirements/sglang-v0.5.21.txt; this smaller set exercises planning, data,
+# controller and configuration contracts without installing SGLang/CUDA wheels.
+datasets>=5.0.1,<6
+numba
+numpy<2.4
+omegaconf>=2.3,<3
+pydantic>=2.11,<3
+pyarrow>=20,<27
+pytest>=8,<9
+PyYAML>=6,<7
+ray==2.59.0
+safetensors>=0.6,<1
+transformers==5.12.1
+wandb>=0.19.10

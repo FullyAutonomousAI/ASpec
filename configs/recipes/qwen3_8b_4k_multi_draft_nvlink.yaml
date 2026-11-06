@@ -1,0 +1,96 @@
+# Release training starting point: three passes, held-out eval and checkpoints.
+# Hyperparameters are not a convergence/quality claim; see docs/user-guide/recipes.md.
+# Portable execution template. See configs/README.md for required inputs and scope.
+# Shared Target observations; each experiment owns its model and optimizer.
+# This initial allocation is an example, not a prescribed optimal topology.
+
+model:
+  target_model_path: ${oc.env:ASPEC_TARGET_MODEL,Qwen/Qwen3-8B}
+  native_context_length: 32768
+  trust_remote_code: false
+  draft_model_config: aspec/config/dspark_draft_config.json
+
+dataset:
+  eval_interval: 100
+  eval_micro_batch_size: 1
+  eval_data_path: ${oc.env:ASPEC_EVAL_DATA}
+  train_data_path: ${oc.env:ASPEC_TRAIN_DATA}
+  chat_template: null
+  shuffle_dataset: true
+  min_loss_tokens: 32
+
+training:
+  num_epochs: 3
+  attention_backend: cudnn_flex_attention
+  draft_context_parallel_size: 1
+  micro_batch_size: 1
+  draft_accumulation_steps: 4
+  training_num_gpus_per_node: 2
+  training_num_nodes: 1
+  fsdp_strategy: REPLICATE
+  placement_strategy: inference_first
+  max_seq_length: 4096
+  learning_rate: 0.0006
+  min_lr: 0.00006
+  streaming_dispatch_with_training: true
+  pipeline_dispatch_with_training: true
+  deterministic_anchor_sampling: false
+  dspark_num_anchors: 512
+  ttt_length: 7
+  dflash_block_size: 7
+  prefetch_depth: 1
+  save_interval: 100
+  save_final_checkpoint: true
+
+inference:
+  inference_engine_type: sgl
+  store_last_hidden_states: true
+  target_prefill_memory_optimized: true
+  inference_num_gpus: 4
+  inference_num_gpus_per_engine: 1
+  inference_num_gpus_per_node: 8
+  inference_batch_size: 2
+  inference_fetch_batch: 8
+  inference_buffer_threshold: 8
+  max_sample_pool_size: 16
+  sglang:
+    tp_size: 1
+    mem_fraction_static: 0.5
+
+mooncake:
+  data_plane: transfer_engine
+  protocol: nvlink_intra
+  require_nvlink: true
+  enable_gpu_direct: true
+  allow_host_fallback: false
+  hidden_dim: 4096
+  max_seq_len: 4096
+  source_gpu_ring_slots: 8
+  destination_gpu_ring_slots: 1
+  gpu_ring_slots: 8
+  get_retry_max_wait_seconds: 120
+  local_buffer_size: 8GB
+  global_segment_size: 32GB
+  host_buffer_size: 1GB
+
+logging:
+  report_to: none
+
+debug:
+  enable_perf_metrics: true
+  performance_measurement_required: false
+  performance_warmup_steps: 2
+  performance_drain_steps: 1
+
+experiments:
+  - name: draft_a
+    training:
+      seed: 42
+  - name: draft_b
+    training:
+      seed: 43
+      learning_rate: 0.0003
+      min_lr: 0.00003
+
+output_dir: outputs/qwen3-8b-multi-draft
+cache_dir: cache/qwen3_8b_4k_multi_draft_nvlink

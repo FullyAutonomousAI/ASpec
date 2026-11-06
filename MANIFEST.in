@@ -1,0 +1,25 @@
+include setup.sh
+include setup.py
+include Dockerfile
+include .dockerignore
+include AGENTS.md
+include CONTRIBUTING.md
+include LICENSE
+include CHANGELOG.md
+include CITATION.cff
+include README.md
+include README_zh-CN.md
+include ROADMAP.md
+include SECURITY.md
+include pyproject.toml
+recursive-include .github *.yml *.md
+recursive-include configs *.yaml *.md
+recursive-include docs *.md *.svg *.png *.json
+recursive-include examples *.jsonl *.sh
+recursive-include aspec/config *.json
+recursive-include aspec/compat/patches *.patch
+recursive-include licenses *
+recursive-include patches *.patch *.md
+recursive-include requirements *.txt
+recursive-include tests *.py
+recursive-include tools *.py *.sh *.json *.patch *.md
