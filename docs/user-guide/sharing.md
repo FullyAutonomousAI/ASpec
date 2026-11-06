@@ -4,6 +4,10 @@ Shared mode captures compatible Target features once and trains independent Draf
 Each experiment owns its weights, optimizer, LR, RNG, evaluation, work frontier, checkpoint and
 tracking output. Shared execution is currently single-node.
 
+The [comparison and independent recovery walkthrough](../../examples/qwen3-8b-shared-target/README.md)
+derives two learning-rate experiments from the shared-target recipe, records separate
+TensorBoard curves and resumes from unequal checkpoints while one Draft is already complete.
+
 Use this workflow to compare Draft algorithms, structures or hyperparameters for the same Target.
 Algorithm selection chooses what each experiment trains; shared execution lets several such
 experiments run concurrently with compatible Target capture generated once. Each keeps its own
@@ -60,7 +64,8 @@ Copy the original saved `config.yaml` outside the run directory and edit each ex
 list, model/data/ordering, LR horizon and execution semantics. Current dotlist overrides do not
 support patching an individual list index; replacing the list with partial entries can lose fields.
 
-Set `training.continual_training=false`, keep the full `lr_total_steps`, choose a fresh root output
+Set both `training.continual_training=false` and `training.continue_source_cursor=false`
+for every child, keep the full `lr_total_steps`, choose a fresh root output
 directory, and set `num_train_steps` to the intended total frontier. Children may resume from different
 committed frontiers. One child's progress never licenses skipping another child's work.
 

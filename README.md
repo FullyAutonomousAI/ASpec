@@ -25,7 +25,8 @@ independent experiments, and take a checkpoint through evaluation and export.
 - **One Target, multiple concurrent Draft experiments.** Compare algorithms, structures or
   hyperparameters while generating compatible Target features once. Each Draft keeps its own
   weights, optimizer, progress and checkpoints, without a shared optimizer-step barrier.
-  See [shared Target training](docs/user-guide/sharing.md) for the single-node workflow.
+  See [shared Target training](docs/user-guide/sharing.md) and the
+  [comparison and recovery walkthrough](examples/qwen3-8b-shared-target/README.md).
 - **Make long-context training practical.** Combine sequence packing, context parallelism and
   optimized attention execution to reduce padding waste and distribute long sequences across GPUs.
 - **Explore without rebuilding the workflow.** Switch between algorithm and model recipes with

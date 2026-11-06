@@ -224,16 +224,18 @@ def test_shared_context_semantics_are_validated_before_gpu_allocation():
         compile_multi_draft_plan(config)
 
 
-def test_full_source_does_not_force_first_draft_to_use_fa4(tmp_path):
+@pytest.mark.parametrize("attention_backend", ["flex_attention", "cudnn_flex_attention"])
+def test_shared_source_preserves_first_draft_attention_backend(tmp_path, attention_backend):
     import json
 
     root = Path(__file__).parents[1]
     raw = json.loads((root / "aspec/config/dflash2_draft_config.json").read_text())
-    raw["is_causal"] = True  # This existing DFlash2 combination requires Flex.
+    raw["is_causal"] = True
     draft = tmp_path / "causal.json"
     draft.write_text(json.dumps(raw))
     config = load_config(str(root / "configs/examples/qwen3_8b_dflash2.yaml"), save_snapshot=False)
     config.model.draft_model_config = str(draft)
+    config.training.attention_backend = attention_backend
     config.inference.store_last_hidden_states = True
     config.training.training_num_gpus_per_node = 1
     config.experiments = OmegaConf.create([
@@ -245,7 +247,7 @@ def test_full_source_does_not_force_first_draft_to_use_fa4(tmp_path):
     ])
     plan = compile_multi_draft_plan(config)
     assert plan.to_runtime_args().draft_context_parallel_size == 1
-    assert plan.to_runtime_args().attention_backend == "flex_attention"
+    assert plan.to_runtime_args().attention_backend == attention_backend
     assert plan.plans["cp2"].to_runtime_args().draft_context_parallel_size == 2
 
 

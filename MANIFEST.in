@@ -15,7 +15,7 @@ include pyproject.toml
 recursive-include .github *.yml *.md
 recursive-include configs *.yaml *.md
 recursive-include docs *.md *.svg *.png *.json
-recursive-include examples *.jsonl *.sh
+recursive-include examples *.jsonl *.sh *.md
 recursive-include aspec/config *.json
 recursive-include aspec/compat/patches *.patch
 recursive-include licenses *
