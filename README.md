@@ -81,7 +81,7 @@ For training with Target-generated data and held-out evaluation, continue with t
 ## Performance
 
 ASpec improves both Draft execution and the complete online training pipeline. The
-[DSpark comparison](docs/benchmarks/results.md) measures Qwen3-8B and Qwen3.8-27B
+[DSpark comparison](docs/benchmarks/results.md) measures Qwen3-8B, Qwen3.5-9B and Qwen3.8-27B
 on Hopper GPUs at short and long context. A representative Qwen3-8B / 4K result:
 
 | Measurement | ASpec input tokens/s | / TorchSpec | / SpecForge | / AngelSpec |

@@ -69,7 +69,7 @@ CUDA_VISIBLE_DEVICES=0,1 aspec quickstart qwen3-8b --output outputs/qwen3-8b-001
 ## 性能
 
 ASpec 同时优化 Draft 执行和完整在线训练流水线。[DSpark 对照](docs/benchmarks/results.md)
-覆盖 Hopper GPU 上 Qwen3-8B、Qwen3.8-27B 的短文档与长上下文。以 Qwen3-8B / 4K 为例：
+覆盖 Hopper GPU 上 Qwen3-8B、Qwen3.5-9B、Qwen3.8-27B 的短文档与长上下文。以 Qwen3-8B / 4K 为例：
 
 | 测量范围 | ASpec 输入吞吐（tokens/s） | 相对 TorchSpec | 相对 SpecForge | 相对 AngelSpec |
 | --- | ---: | ---: | ---: | ---: |

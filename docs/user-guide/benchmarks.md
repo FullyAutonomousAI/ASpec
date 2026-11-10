@@ -7,7 +7,7 @@ quality and serving speed have separate evaluation protocols.
 
 | Comparison | Workload and boundary | Results |
 | --- | --- | --- |
-| DSpark framework comparison | H200, Qwen3-8B 4K/128K and Qwen3.8-27B 4K/256K; per-document anchors; online loop wall time | [Final framework matrix](../benchmarks/results.md#end-to-end-training) |
+| DSpark framework comparison | H200, Qwen3-8B 4K/128K, Qwen3.5-9B 4K/256K and Qwen3.8-27B 4K/256K; per-document anchors; online loop wall time | [Final framework matrix](../benchmarks/results.md#end-to-end-training) |
 | Resident DSpark | One GPU, common real features and initial values; excludes Target/transport | [Draft-only results](../benchmarks/results.md#draft-only-training) |
 | DeepSpec | 8B 4K/128K; resident Draft training and native offline cache-first workflow | [DeepSpec comparison](../benchmarks/deepspec.md) |
 | EAGLE3 | H200, synthetic 4K/16K, single-GPU train core | [Latency and memory](../benchmarks/eagle3-h200.md) |
@@ -16,8 +16,8 @@ quality and serving speed have separate evaluation protocols.
 
 The final online headline uses the post-warmup steady window. Every framework
 uses padded-document MBS1; ASpec's THD path is reported separately as a layout
-and capacity option. ASpec measures **1.53–2.28x** TorchSpec, **1.09–2.50x**
-SpecForge and **1.65–2.68x** AngelSpec in completed pairs. Higher BSHD
+and capacity option. ASpec measures **1.53–2.40x** TorchSpec, **1.07–2.67x**
+SpecForge and **1.29–2.97x** AngelSpec in completed pairs. Higher BSHD
 microbatch sizes are not selected opportunistically. Each result
 describes its measured configuration and software, not a universal speedup or
 quality-equivalence claim.
