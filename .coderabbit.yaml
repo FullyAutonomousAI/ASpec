@@ -1,0 +1,109 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+
+language: en-US
+tone_instructions: >-
+  Be concise and evidence-driven. Prioritize correctness, lifecycle, compatibility,
+  and missing verification over style-only feedback.
+
+reviews:
+  profile: assertive
+  request_changes_workflow: false
+  high_level_summary: true
+  high_level_summary_instructions: |
+    Summarize user-visible behavior, compatibility or provenance implications,
+    verification actually present in the pull request, and any unverified scope.
+    Keep performance, numerical correctness, capacity, lifecycle, and quality
+    claims separate.
+  merge_risk_instructions: |
+    Treat changes to workload semantics, planning, scheduling, ownership/fencing,
+    recovery, checkpoints, distributed topology, tensor contracts, CUDA kernels,
+    training objectives, public configuration, and release provenance as high risk.
+    Documentation-only and test-only changes are lower risk only when they do not
+    alter shipped recipes, public claims, or executable contracts.
+  sequence_diagrams: false
+  poem: false
+
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    drafts: false
+
+  auto_approvals:
+    enabled: false
+
+  path_instructions:
+    - path: "aspec/{planning.py,topology.py,evidence.py,reporting.py,runtime_identity.py,work_lifecycle.py}"
+      instructions: |
+        Verify that workload semantics, available capability, selected Plan, and
+        observed Evidence remain distinct. Required capabilities must fail closed;
+        fallback, omission, requested/effective values, and unknown observations
+        must remain explicit. Check memory and capacity accounting by resource class.
+
+    - path: "aspec/{controller,ray,transfer,offline}/**"
+      instructions: |
+        Review stable work identity, exactly-once committed work, bounded admission,
+        lease ownership, fencing, terminal states, and cleanup on success, failure,
+        cancellation, and recovery. Flag races, early reclamation, cross-run cleanup,
+        silent remote fallback, and incomplete finite-tail handling.
+
+    - path: "aspec/{training,data}/**"
+      instructions: |
+        Check packing and regrouping preserve document boundaries, supervision,
+        positions, source identity, optimizer-step semantics, resume state, and RNG.
+        Changes to algorithms, objectives, checkpoint formats, or export assets need
+        focused compatibility tests and must not conflate functional, numerical,
+        lifecycle, throughput, or quality evidence.
+
+    - path: "aspec/{models,kernels,inference}/**"
+      instructions: |
+        Prioritize tensor shape/layout/dtype/device contracts, distributed geometry,
+        masking and normalization semantics, numerical stability, autograd behavior,
+        synchronization, aliasing, stream lifetime, and bounded specialization.
+        Require evidence appropriate to CPU, GPU, CUDA Graph, multi-GPU, or
+        multi-node behavior; a skipped GPU test is not acceptance evidence.
+
+    - path: "aspec/compat/**"
+      instructions: |
+        Confirm compatibility code stays narrow and version-pinned. For copied or
+        adapted upstream content, verify source/revision attribution, modification
+        notes, inherited notices, license texts, and contract tests remain complete.
+
+    - path: "tests/**"
+      instructions: |
+        Check that tests exercise observable behavior and failure paths without
+        weakening assertions to manufacture agreement. GPU and integration gates
+        must remain explicit; mocks or skips must not be presented as hardware,
+        numerical, performance, lifecycle, or quality acceptance.
+
+    - path: "{configs,docs,examples,.github}/**"
+      instructions: |
+        Keep public behavior, recipes, support boundaries, examples, CI, and claims
+        aligned with implementation. Performance claims need comparable workload,
+        hardware/software identity, statistics, correctness evidence, and explicit
+        limitations. Do not expose credentials, private data, weights, or local paths.
+
+  tools:
+    ruff:
+      enabled: true
+      config_file: pyproject.toml
+    pylint:
+      enabled: false
+    flake8:
+      enabled: false
+    markdownlint:
+      enabled: false
+    shellcheck:
+      enabled: true
+    actionlint:
+      enabled: true
+    github-checks:
+      enabled: true
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - AGENTS.md
+      - CONTRIBUTING.md
+      - docs/framework/ARCHITECTURE.md
+      - docs/framework/DECISIONS.md
