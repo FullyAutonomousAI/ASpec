@@ -25,7 +25,7 @@ from aspec.config.train_config import load_config
 from aspec.planning import compile_execution_plan
 from tools.quickstart import MODELS, build_profile
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.mark.parametrize("name", MODELS)

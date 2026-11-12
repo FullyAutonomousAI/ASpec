@@ -28,7 +28,7 @@ from aspec.config.train_config import Config, load_config
 from aspec.planning import PlanCompileError, compile_execution_plan
 from aspec.topology import current_capability_bundle
 
-_REPO_ROOT = Path(__file__).parents[1]
+_REPO_ROOT = Path(__file__).parents[2]
 _REFERENCE_CONFIG = _REPO_ROOT / "configs" / "examples" / "sglang_qwen3_8b_dspark.yaml"
 _DRAFT_CONFIG = _REPO_ROOT / "aspec" / "config" / "dspark_draft_config.json"
 

@@ -496,7 +496,7 @@ def test_conditioned_plan_rejects_unimplemented_combinations(key, value, monkeyp
 
     monkeypatch.setenv("ASPEC_TRAIN_DATA", "examples/data/sample_conversations.jsonl")
     monkeypatch.setenv("ASPEC_EVAL_DATA", "examples/data/sample_conversations.jsonl")
-    path = Path(__file__).parents[1] / "configs/recipes/qwen3_5_9b_dmtp.yaml"
+    path = Path(__file__).parents[2] / "configs/recipes/qwen3_5_9b_dmtp.yaml"
     config = load_config(str(path), save_snapshot=False)
     plan = compile_execution_plan(config)
     assert plan.workload.objective["prediction_start"] == 1

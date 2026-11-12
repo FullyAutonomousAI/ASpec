@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 WRAPPER = ROOT / "tools/run_in_env.sh"
 
 

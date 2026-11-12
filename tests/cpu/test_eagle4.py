@@ -31,7 +31,7 @@ from aspec.planning import compile_execution_plan
 from aspec.training.checkpoint import load_initial_draft_weights
 from tools import convert_to_hf
 
-ROOT = Path(__file__).parents[1]
+ROOT = Path(__file__).parents[2]
 
 
 def raw_config(stage="draft", **changes):

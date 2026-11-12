@@ -17,7 +17,7 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 SHARED_CUTE_PACKAGES = ("nvidia-cutlass-dsl", "quack-kernels")
 
 

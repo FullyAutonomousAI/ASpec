@@ -17,7 +17,7 @@
 import ast
 from pathlib import Path
 
-ROOT = Path(__file__).parents[1]
+ROOT = Path(__file__).parents[2]
 PUBLIC_TREES = (
     ".github",
     "configs",
@@ -60,8 +60,8 @@ TEXT_SUFFIXES = {
     ".yml",
 }
 HYGIENE_FIXTURES = {
-    ROOT / "tests/test_open_source_entrypoints.py",
-    ROOT / "tests/test_release_audit.py",
+    ROOT / "tests/cpu/test_open_source_entrypoints.py",
+    ROOT / "tests/cpu/test_release_audit.py",
     Path(__file__),
 }
 
@@ -228,5 +228,6 @@ def test_eagle4_validation_gates_do_not_use_optimizable_asserts():
 
 def test_public_ci_includes_eagle4_cpu_contracts():
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    assert "python -m pytest -q tests/cpu" in workflow
     for name in ("test_eagle4.py", "test_eagle4_moe.py", "test_eagle4_validation.py"):
-        assert f"tests/{name}" in workflow
+        assert (ROOT / "tests/cpu" / name).is_file()

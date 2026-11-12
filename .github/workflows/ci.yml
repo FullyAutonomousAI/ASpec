@@ -51,42 +51,10 @@ jobs:
           python -m pip install -r requirements/ci-cpu.txt
           python -m pip install --no-deps -e .
       - name: Run dependency-light source contracts
-        run: python -m pytest -q tests/test_source_quality_contracts.py
+        run: python -m pytest -q tests/source
       - name: Run offline CPU contracts
         env:
+          CUDA_VISIBLE_DEVICES: ""
           HF_HUB_OFFLINE: "1"
           TRANSFORMERS_OFFLINE: "1"
-        run: |
-          python -m pytest -q \
-            tests/test_capacity_handling.py \
-            tests/test_environment_scripts.py \
-            tests/test_onboarding.py \
-            tests/test_dependency_extras.py \
-            tests/test_cudnn_gqa_mode.py \
-            tests/test_dependency_audit.py \
-            tests/test_draft_model_config.py \
-            tests/test_draft_dsa.py \
-            tests/test_eagle4.py \
-            tests/test_eagle4_moe.py \
-            tests/test_eagle4_validation.py \
-            tests/test_fa4_import_compat.py \
-            tests/test_flex_attention_backend.py \
-            tests/test_dmtp.py \
-            tests/test_training_resume_rng.py \
-            tests/test_evaluation_contract.py \
-            tests/test_open_source_entrypoints.py \
-            tests/test_release_audit.py \
-            tests/test_shipped_config_defaults.py \
-            tests/test_release_recipes.py \
-            tests/test_recipe_node_loss.py \
-            tests/test_owner_fence.py \
-            tests/test_recipe_capacity.py \
-            tests/test_node_local_files.py \
-            tests/test_stage_recipe_inputs.py \
-            tests/test_target_lm_head.py \
-            tests/test_dspark_teacher_contract.py \
-            tests/test_planning.py \
-            tests/test_renderer_registry.py \
-            tests/test_reporting.py \
-            tests/test_training_config_validation.py
-          python -m pytest -q tests/test_wheel_assets.py tests/test_sglang_patch_contract.py
+        run: python -m pytest -q tests/cpu

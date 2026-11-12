@@ -44,7 +44,7 @@ def test_stage_and_verify_with_local_ssh_double(tmp_path):
         "--host",
         "fake-node",
     ]
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     subprocess.run(cmd, env=env, cwd=root, check=True, capture_output=True)
     assert checksum_lines(source) == checksum_lines(destination)
     assert subprocess.run(cmd, env=env, cwd=root, capture_output=True).returncode != 0

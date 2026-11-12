@@ -31,7 +31,18 @@ python -m tools.build_release --outdir /absolute/path/to/new-release-dist
 Default tests are fast/offline. GPU, tokenizer, training and cuDNN gates need explicit switches
 declared in their test files. A skip is not GPU acceptance. Public CI checks lint, local doc links,
 compilation, plus a curated CPU/offline contract suite installed from `requirements/ci-cpu.txt`
-on pull requests and configured branch pushes. The separate [release build](.github/workflows/build-release.yml)
+on pull requests and configured branch pushes. CI uses pytest's directory discovery: put new
+dependency-light repository checks in `tests/source/test_*.py` and offline CPU contracts supported by
+the CI runtime in `tests/cpu/test_*.py`. New tests in either directory run automatically without
+editing the workflow. Keep tests requiring GPUs, model downloads or the full pinned runtime outside
+these directories. Run the same suites locally with:
+
+```bash
+python -m pytest -q tests/source
+CUDA_VISIBLE_DEVICES="" HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 python -m pytest -q tests/cpu
+```
+
+The separate [release build](.github/workflows/build-release.yml)
 workflow builds and audits sdist/wheel artifacts and checks wheel installation only when a `v*` tag
 is pushed; see [release instructions](docs/releasing.md). Neither workflow certifies GPU health or
 replaces the complete pinned-runtime suite above. Equivalent remote checks are not proof that hosted

@@ -18,7 +18,7 @@ from omegaconf import OmegaConf
 
 
 def _repo_root() -> Path:
-    return Path(__file__).parents[1]
+    return Path(__file__).parents[2]
 
 
 def test_shipped_small_draft_configs_use_replicate():

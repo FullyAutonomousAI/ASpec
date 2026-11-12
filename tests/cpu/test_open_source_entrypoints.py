@@ -111,13 +111,13 @@ def test_document_links_ignore_snapshots_and_fenced_examples(tmp_path):
 
 
 def test_maintained_documentation_has_no_missing_local_targets():
-    assert not check_links(Path(__file__).resolve().parents[1])
+    assert not check_links(Path(__file__).resolve().parents[2])
 
 
 def test_quickstart_has_two_gpu_roles_and_fixed_resume_horizon():
     from aspec.config.train_config import load_config
 
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     config = load_config(str(root / "configs/recipes/quickstart_qwen3_8b.yaml"))
     assert config.training.training_num_gpus_per_node == 1
     assert config.inference.inference_num_gpus == 1
@@ -128,7 +128,7 @@ def test_quickstart_has_two_gpu_roles_and_fixed_resume_horizon():
 
 
 def test_sdist_includes_runtime_install_requirements():
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     assert "recursive-include requirements *.txt" in (root / "MANIFEST.in").read_text()
 
 

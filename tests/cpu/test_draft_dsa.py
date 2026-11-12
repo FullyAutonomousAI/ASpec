@@ -355,7 +355,7 @@ def test_serving_export_does_not_silently_erase_dsa():
 
 
 def test_dsa_example_configs_keep_same_identity_across_phase_boundaries():
-    root = Path(__file__).parents[1]
+    root = Path(__file__).parents[2]
     configs = []
     for stage, name in (("dense", "dense"), ("indexer_warmup", "indexer"), ("sparse", "sparse")):
         path = root / f"aspec/config/dspark_qwen3_8b_dsa_{name}_draft_config.json"
@@ -372,7 +372,7 @@ def test_plan_preserves_dsa_and_packing_without_compression_alignment(monkeypatc
     from aspec.config.train_config import load_config
     from aspec.planning import compile_execution_plan
 
-    root = Path(__file__).parents[1]
+    root = Path(__file__).parents[2]
     monkeypatch.chdir(root)
     recipe = root / "configs/examples/qwen3_8b_dsa_dspark.yaml"
     run = load_config(str(recipe), save_snapshot=False)
