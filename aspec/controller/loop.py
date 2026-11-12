@@ -1995,8 +1995,10 @@ def training_loop(
             }
             if "train/avg_acc" in metrics:
                 postfix["acc"] = f"{metrics['train/avg_acc']:.3f}"
-            if "train/simulated_acc_len" in metrics:
-                postfix["acc_len"] = f"{metrics['train/simulated_acc_len']:.2f}"
+            for key, label in (("train/simulated_acc_len", "acc_len"),
+                               ("train/suffix_simulated_acc_len", "suffix_acc_len")):
+                if key in metrics:
+                    postfix[label] = f"{metrics[key]:.2f}"
             if enable_perf:
                 postfix["P~"] = (
                     f"{metrics.get('perf/producer_batch_rate_estimate', 0):.1f}"

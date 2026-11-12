@@ -19,6 +19,7 @@ connections on your hardware before training.
 | `dflash` | Qwen3-8B / DFlash | 1 node, 3 GPUs: 1T + 2D; 4K | Train a block-parallel DFlash Draft |
 | `eagle3` | Qwen3-8B / EAGLE3 | 1 node, 3 GPUs: 1T + 2D; 4K | Train a recurrent EAGLE3 Draft |
 | `eagle4` | Qwen3-8B / EAGLE4 | 1 node, 3 GPUs: 1T + 2D; 4K; sequential stages | Train a Draft, then candidate retrieval projections |
+| `dmtp` | Qwen3.5-9B / MTP-conditioned DSpark | 1 node, 8 GPUs: 4T + 4D; 4K, CP1 | Train a Draft conditioned on the frozen native predictor; native assets |
 | `native-mtp` | Qwen3.5-9B / native predictor | 1 node, 3 GPUs: 1T + 2D; 4K | Fine-tune the Target's native predictor |
 | `ling-tiny` | Ling-3.0-tiny / Dense DSpark | 1 node, 2 GPUs: 1T + 1D; 4K | Train a small Ling Draft |
 | `ling-flash` | Ling-3.0-flash / Dense DSpark | 1 node, 3 GPUs: 2T (TP2) + 1D; 4K | Train against a larger Ling Target |
@@ -40,6 +41,8 @@ For a short single-node DSpark run with cuDNN attention, CP1 and no packing, use
 [Qwen3.8-27B / 4K](../../configs/examples/qwen3_8_27b_4k_cudnn_nvlink.yaml) example.
 Both start with four TP1 Target engines and four Draft GPUs and require a matching local Target
 checkpoint plus prepared token IDs/masks. The 9B DSpark example is separate from native MTP training.
+
+MTP-conditioned DSpark is available as `aspec recipes plan dmtp`. See the [Qwen3.5-9B workflow](../../examples/qwen3.5-9b-dmtp/README.md) for supervision timing, recovery and native export.
 
 ## Inputs and normal training
 

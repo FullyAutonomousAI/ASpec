@@ -120,7 +120,10 @@ def _check_idle_timeout(
 
 def eval_selection_metric(metrics):
     """Retrieval recall is not decoder acceptance; each stage selects its own proxy."""
-    return "eval/candidate_top1_recall" if "eval/candidate_top1_recall" in metrics else "eval/simulated_acc_len"
+    for key in ("eval/candidate_top1_recall", "eval/suffix_simulated_acc_len"):
+        if key in metrics:
+            return key
+    return "eval/simulated_acc_len"
 
 
 def update_checkpoint_eval_meta(
@@ -142,13 +145,17 @@ def update_checkpoint_eval_meta(
         logger.warning(f"Checkpoint meta.json not found at {meta_path}, skipping eval meta update")
         return current_best
 
-    for key in ("eval/avg_loss", "eval/avg_acc", "eval/simulated_acc_len",
+    selection_metric = eval_selection_metric(eval_metrics)
+    for key in ("eval/avg_loss", "eval/avg_acc", "eval/simulated_acc_len", "eval/suffix_simulated_acc_len",
                 "eval/candidate_top1_recall", "eval/candidate_teacher_mass"):
         if key in eval_metrics:
             metadata[key] = eval_metrics[key]
+    if selection_metric in eval_metrics:
+        metadata["selection_metric"] = selection_metric
+        if selection_metric == "eval/suffix_simulated_acc_len":
+            metadata.pop("eval/simulated_acc_len", None)
     _write_checkpoint_metadata(meta_path, metadata)
 
-    selection_metric = eval_selection_metric(eval_metrics)
     score = eval_metrics.get(selection_metric)
     if score is not None and math.isfinite(score) and score > current_best:
         current_best = score

@@ -96,6 +96,18 @@ anchor-shared window. FA4 preserves
 convolution, selector, document boundaries and CP ownership. Functional results do not establish
 official-recipe reproduction or long-term quality.
 
+## Native MTP conditioning for DSpark/DFlash
+
+`configs/recipes/qwen3_5_9b_dmtp.yaml` uses the native Qwen3.5 predictor as a frozen
+condition for a DSpark Draft. DFlash uses the corresponding DMTP Draft JSON.
+The ordinary trainer owns fusion parameters, optimizer, recovery and native assets;
+Target selected-layer/final-state transport stays unchanged. Dense full GQA, CP1,
+MBS1, REPLICATE, one node and non-packing are the initial scope. Other combinations
+fail Plan validation. Follow the [workflow and timing contract](../../examples/qwen3.5-9b-dmtp/README.md).
+Given teacher-forced T1, only unknown suffix positions receive supervision. Suffix
+acceptance observations are conditional; native export requires an MTP-aware downstream
+consumer and does not certify generic SGLang serving.
+
 ## Native Qwen3.5 MTP
 
 `configs/recipes/qwen3_5_9b_mtp.yaml` initializes the actual native predictor and binds frozen embeddings/head

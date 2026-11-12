@@ -163,6 +163,9 @@ def _serving_config(raw_config: dict) -> dict:
     from aspec.config.draft_attention import resolve_draft_attention
     from aspec.config.draft_structure import resolve_draft_structure
 
+    if raw_config.get("mtp_conditioning"):
+        raise NotImplementedError("MTP-conditioned Drafts require native --format aspec export")
+
     if raw_config.get("architectures") == ["NativeMTPDraftModel"]:
         native = json.loads(json.dumps(raw_config["native_config"]))
         native["architectures"] = ["Qwen3_5ForCausalLMMTP"]
@@ -461,6 +464,10 @@ def convert_checkpoint(
     }
     if eagle4_asset is not None:
         manifest["eagle4"] = eagle4_asset
+    if raw_config.get("mtp_conditioning"):
+        from aspec.config.mtp_conditioning import mtp_conditioning_semantics
+
+        manifest["mtp_conditioning"] = mtp_conditioning_semantics(raw_config)
     if artifact_format == "aspec":
         manifest["compute_dtype"] = str(model.embed_tokens.weight.dtype)
         manifest["tensor_dtypes"] = dict(Counter(str(t.dtype) for t in tensors.values()))
@@ -473,7 +480,7 @@ def convert_checkpoint(
         if policy.get("dsa") is not None:
             manifest["draft_structure"]["attention"]["dsa"] = policy["dsa"]
         algorithm = training_contract["algorithm"]
-        block_proposal = algorithm in {"dspark", "dflash"}
+        block_proposal = algorithm in {"dspark", "dflash"} and not raw_config.get("mtp_conditioning")
         mla_proposal = raw_config.get("architectures") == ["Eagle3DeepseekV2ForCausalLM"]
         proposal = ("aspec.draft_artifact.MLAEagleConsumer" if mla_proposal else
                     "aspec.draft_artifact.BlockDraftConsumer" if block_proposal else None)
@@ -483,7 +490,7 @@ def convert_checkpoint(
             "validation": "required_per_artifact",
             "scope": ("asset and proposal; caller owns verifier features/cache/verification"
                       if proposal else "asset loading and weights-only warmstart; no native proposal component"),
-            "borrowed_tensors": ["Target output head"] if block_proposal else [],
+            "borrowed_tensors": ["Target output head"] if algorithm in {"dspark", "dflash"} else [],
         }
     (output_dir / "export_manifest.json").write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n",

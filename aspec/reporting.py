@@ -339,6 +339,8 @@ def render_run_report(report: Mapping[str, Any]) -> str:
     evaluation = training.get("evaluation")
     if evaluation and evaluation.get("enabled"):
         lines.append(f"held_out_eval: {len(evaluation.get('history', []))} points; proxy_only=true")
+        if evaluation.get("selection_metric"):
+            lines.append(f"selection_metric: {evaluation['selection_metric']}")
         best = evaluation.get("best_checkpoint")
         lines.append(f"best_checkpoint: {best.get('checkpoint') if best else None}")
     if performance:

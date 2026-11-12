@@ -65,7 +65,8 @@ def test_eval_rebatch_preserves_document_length_and_local_cp_ownership(cp_size):
         torch.testing.assert_close(teacher[:, :hi - lo], sample["last_hidden_states"])
 
 
-def test_exact_resume_retains_eval_history_only_through_selected_frontier(tmp_path, monkeypatch):
+@pytest.mark.parametrize("metric_key", ["eval/simulated_acc_len", "eval/suffix_simulated_acc_len"])
+def test_exact_resume_retains_eval_history_only_through_selected_frontier(tmp_path, monkeypatch, metric_key):
     from aspec.controller import eval as evaluation
 
     target = tmp_path / "target"
@@ -82,8 +83,8 @@ def test_exact_resume_retains_eval_history_only_through_selected_frontier(tmp_pa
                            load_path=str(checkpoint))
     identity = evaluation.eval_cache_identity(args, "sha256:eval", 2)
     (previous / "evaluation.json").write_text(json.dumps({"cache_identity": identity, "history": [
-        {"step": 8, "checkpoint": str(checkpoint), "metrics": {"eval/simulated_acc_len": 0.3}},
-        {"step": 16, "checkpoint": str(later), "metrics": {"eval/simulated_acc_len": 0.9}},
+        {"step": 8, "checkpoint": str(checkpoint), "metrics": {metric_key: 0.3}},
+        {"step": 16, "checkpoint": str(later), "metrics": {metric_key: 0.9}},
     ]}))
     controller, group = Mock(), Mock()
     controller.get_dataset_admission_evidence.remote.return_value = {"eval": {"dataset_fingerprint": "sha256:eval"}}

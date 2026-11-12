@@ -82,6 +82,7 @@ class DFlashConfig(PretrainedConfig):
         norm_topk_prob: bool = True,
         router_aux_loss_coef: Optional[float] = None,
         cudnn_gqa_mode: str = "auto",
+        mtp_conditioning: Optional[dict] = None,
         **kwargs,
     ):
         # Transformers 5 validates YaRN parameters inside PretrainedConfig's
@@ -164,6 +165,11 @@ class DFlashConfig(PretrainedConfig):
             setattr(self, key, value)
         if self.model_type != "k3_dspark" and getattr(self, "attention_mode", "gqa") != "mla":
             resolve_dflash_rope_parameters(self)
+        from aspec.config.mtp_conditioning import resolve_mtp_conditioning
+
+        self.mtp_conditioning = resolve_mtp_conditioning({
+            **self.to_dict(), "mtp_conditioning": mtp_conditioning,
+        })
 
 
 class DFlashRMSNorm(nn.Module):
@@ -1140,6 +1146,15 @@ class DFlashDraftModel(PreTrainedModel):
 
         # Final norm
         self.final_norm = DFlashRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.mtp_fusion = self.mtp_source = None
+        if getattr(config, "mtp_conditioning", None):
+            from aspec.models.dmtp import FrozenMTPFeatures, MTPAnchorFusion
+
+            self.freeze_embedding()
+            self.mtp_source = FrozenMTPFeatures(config.mtp_conditioning["native_config"])
+            if config.mtp_conditioning["mode"] == "hidden":
+                self.mtp_fusion = MTPAnchorFusion(config.hidden_size, target_hidden_size,
+                                                  eps=config.rms_norm_eps)
         self.last_csa_indexer_losses = ()
         self.last_qsa_indexer_losses = ()
         self.last_dsa_indexer_losses = ()
@@ -1147,6 +1162,36 @@ class DFlashDraftModel(PreTrainedModel):
         self.configure_csa_trainable_parameters()
         self.configure_qsa_trainable_parameters()
         self.configure_dsa_trainable_parameters()
+
+    def initialize_mtp_conditioning(self, target_model_path):
+        if self.mtp_source is not None:
+            self.mtp_source.initialize_native_weights(target_model_path)
+
+    @torch.no_grad()
+    def validate_mtp_binding(self, target_model_path, embedding_key):
+        if self.mtp_source is None:
+            return
+        from transformers import AutoConfig
+
+        from aspec.config.mtp_conditioning import validate_mtp_target_config
+        from aspec.models.draft.base import load_tensor_from_pretrained
+
+        validate_mtp_target_config(
+            self.config.mtp_conditioning["native_config"],
+            AutoConfig.from_pretrained(target_model_path).to_dict(),
+        )
+
+        actual = self.embed_tokens.weight
+        if hasattr(actual, "full_tensor"):
+            actual = actual.full_tensor()
+        expected = load_tensor_from_pretrained(target_model_path, embedding_key)
+        if actual.shape != expected.shape:
+            raise ValueError("MTP conditioning embedding shape differs from its Target")
+        for start in range(0, expected.shape[0], 1024):
+            if not torch.equal(actual[start:start + 1024].cpu(),
+                               expected[start:start + 1024].to(dtype=actual.dtype)):
+                raise ValueError("MTP conditioning frozen embedding differs from its Target")
+        self.mtp_source.validate_native_weights(target_model_path)
 
     def configure_dsa_trainable_parameters(self) -> None:
         layers = [layer.self_attn.dsa_layer for layer in self.layers

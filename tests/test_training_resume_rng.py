@@ -16,12 +16,20 @@ from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+import pytest
 import torch
 
 from aspec.training import checkpoint, dflash_trainer
+from aspec.training.dspark_trainer import DSparkTrainer
 
 
-def test_training_rng_is_restored_after_target_helper_initialization(monkeypatch):
+@pytest.mark.parametrize("trainer_class,anchor_offset", [
+    (dflash_trainer.DFlashTrainer, 1), (DSparkTrainer, 0),
+])
+@pytest.mark.parametrize("explicit_none", [False, True])
+def test_training_rng_is_restored_after_target_helper_initialization(
+    monkeypatch, trainer_class, anchor_offset, explicit_none,
+):
     saved_rng = torch.get_rng_state().clone()
 
     class Draft(torch.nn.Linear):
@@ -36,16 +44,20 @@ def test_training_rng_is_restored_after_target_helper_initialization(monkeypatch
         def keep_csa_projection_precision(self):
             pass
 
-    trainer = object.__new__(dflash_trainer.DFlashTrainer)
+    # Legacy Draft/wrapper extensions deliberately have no MTP-specific methods
+    # or attributes. Disabled optional features must not require those hooks.
+    trainer = object.__new__(trainer_class)
+    trainer._anchor_slot_offset = anchor_offset
     trainer.args = SimpleNamespace(
         lr_total_steps=32, learning_rate=0.001, max_grad_norm=1, continual_training=False
     )
     trainer.dp_rank, trainer.global_step = 0, 0
     trainer.dp_mesh, trainer.fsdp_cpu_offload = None, False
     trainer.prof = SimpleNamespace(on_init_end=Mock())
-    trainer._draft_config_class = lambda **_: SimpleNamespace(
-        num_target_layers=1, target_hidden_size=2, target_num_hidden_layers=2
-    )
+    config = dict(num_target_layers=1, target_hidden_size=2, target_num_hidden_layers=2)
+    if explicit_none:
+        config["mtp_conditioning"] = None
+    trainer._draft_config_class = lambda **_: SimpleNamespace(**config)
     trainer._get_init_weight_context_manager = lambda: nullcontext
     trainer._build_draft_model = lambda _: Draft(2, 2)
 
@@ -83,3 +95,5 @@ def test_training_rng_is_restored_after_target_helper_initialization(monkeypatch
     trainer.init_model({}, "unused")
     assert trainer.global_step == 16
     assert torch.equal(torch.get_rng_state(), saved_rng)
+    assert trainer._anchor_slot_offset == anchor_offset
+    assert not trainer._mtp_binding_validated

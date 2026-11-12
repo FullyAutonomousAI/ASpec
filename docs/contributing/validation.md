@@ -15,7 +15,7 @@ python -m tools.check_docs
 python -m ruff check aspec tests tools
 ```
 
-`contracts` checks all 13 configs/12 workflows, resource budgets and training defaults, negative
+`contracts` checks all 14 configs/13 workflows, resource budgets and training defaults, negative
 acceptance cases, and existing algorithm/packing/CP/sharing/multi-node contracts. Model names, data
 paths and node IPs in CPU tests are fixtures, never real GPU inputs. No models are downloaded by this
 command. CPU contracts do not establish GPU kernel parity or available capacity.
@@ -80,6 +80,7 @@ bash tools/run_in_env.sh python -m tools.recipes export \
 | Scope | Required additional evidence |
 | --- | --- |
 | DFlash / EAGLE3 / Native MTP | Algorithm contract tests plus the actual recipe's train/resume/assets; Native MTP initialization must use the native predictor |
+| MTP-conditioned DSpark / DFlash | Native timing/loss/frozen-state tests, real train/resume/native assets and conditional-suffix observations; no full serving acceptance claim |
 | EAGLE4 | Both stage reports and candidate frozen-body audit; stage-local resume; no official candidate-recipe claim |
 | Ling | Correct model tokenizer/template and feature layers; use Ling-prepared data; MoE routing/bias state is retained |
 | 27B CP2 | Genuine long supervised inputs, actual long work in runtime metrics, GPU CP loss/gradient parity and measured memory fit |

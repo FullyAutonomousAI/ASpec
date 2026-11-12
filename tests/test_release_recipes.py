@@ -83,7 +83,7 @@ def test_qwen8b_recipes_plan_without_target_override(name, monkeypatch):
 
 def test_catalog_exactly_covers_formal_files():
     entries = recipes.catalog()
-    assert len(entries) == 12
+    assert len(entries) == 13
     declared = {p for entry in entries.values() for p in entry["configs"]}
     assert declared == {
         str(p.relative_to(recipes.ROOT)) for p in (recipes.ROOT / "configs/recipes").glob("*.yaml")

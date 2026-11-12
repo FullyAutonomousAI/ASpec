@@ -142,6 +142,8 @@ class DFlashModel(nn.Module):
       - Per-position loss_mask application
     """
 
+    prediction_start = 1
+
     def __init__(
         self,
         draft_model,
@@ -169,6 +171,8 @@ class DFlashModel(nn.Module):
             raise ValueError(f"dflash_dpace_alpha must be in [0, 1], got {dpace_alpha}")
 
         self.draft_model = draft_model
+        self.mtp_conditioning = getattr(getattr(draft_model, "config", None), "mtp_conditioning", None)
+        self.prediction_start = type(self).prediction_start + int(self.mtp_conditioning is not None)
         self.block_size = block_size
         self.num_anchors = num_anchors
         if anchor_sampling_scope not in {"row", "sample"}:
@@ -181,11 +185,17 @@ class DFlashModel(nn.Module):
         self.loss_decay_gamma = loss_decay_gamma
         self.ce_loss_alpha = float(ce_loss_alpha)
         self.l1_loss_alpha = float(l1_loss_alpha)
+        if self.mtp_conditioning and (block_size <= self.prediction_start
+                                     or self.loss_objective != "decay"):
+            raise ValueError("MTP conditioning requires decay loss and an unknown suffix slot")
         execution = resolve_draft_execution_capability(
             attention_backend, draft_context_parallel_size
         )
         self.attention_backend = execution.attention_backend
         self.draft_context_parallel_size = execution.context_parallel_size
+        if self.mtp_conditioning and (self.draft_context_parallel_size != 1
+                                     or anchor_sampling_scope != "row"):
+            raise ValueError("MTP conditioning currently requires CP1 row anchors")
         self.direct_cp_backend = execution.direct_cp_backend
         from aspec.config.draft_attention import (
             draft_context_shard_alignment,
@@ -234,11 +244,33 @@ class DFlashModel(nn.Module):
             self.direct_cp_group = None
 
     @property
-    def uses_target_hidden_states(self) -> bool:
+    def uses_target_distribution(self) -> bool:
         config = getattr(self.draft_model, "config", None)
         if getattr(config, "dsa_training_stage", None) == "indexer_warmup":
             return False
         return self.l1_loss_alpha > 0
+
+    @property
+    def uses_target_hidden_states(self) -> bool:
+        return self.uses_target_distribution or bool(
+            self.mtp_conditioning and self.mtp_conditioning["mode"] == "hidden"
+        )
+
+    def _prepare_draft_prefix(self, input_ids, last_hidden_states, attention_mask, draft_prefix,
+                              *packed_metadata):
+        if not self.mtp_conditioning:
+            if draft_prefix is not None:
+                raise ValueError("Unconditioned Draft does not accept an MTP prefix")
+            return None
+        if any(value is not None for value in packed_metadata):
+            raise ValueError("MTP conditioning does not accept packed or sharded documents")
+        if input_ids.shape[0] != 1:
+            raise ValueError("MTP conditioning currently requires microbatch size one")
+        if draft_prefix is None:
+            from aspec.models.dmtp import training_mtp_prefix
+
+            return training_mtp_prefix(self.draft_model, input_ids, last_hidden_states, attention_mask)
+        return draft_prefix
 
     def _sample_anchor_positions(
         self,
@@ -257,6 +289,11 @@ class DFlashModel(nn.Module):
             raise ValueError("Sample anchor sampling requires packed_document_lengths from the collator")
         if (injected_anchors is None) != (injected_keep_mask is None):
             raise ValueError("Anchor replay requires both injected_anchors and injected_keep_mask")
+        if self.mtp_conditioning:
+            # There is no verifier h[-1] for the first document token. Keep
+            # this exclusion in sampling/replay, not a stochastic runtime error.
+            loss_mask = loss_mask.clone()
+            loss_mask[:, 0] = 0
         if injected_anchors is not None:
             return validate_injected_anchors(
                 injected_anchors, injected_keep_mask,
@@ -353,6 +390,16 @@ class DFlashModel(nn.Module):
         )
 
         return self.draft_model.embed_tokens(noise_ids)
+
+    def _condition_noise_embed(self, embeddings, input_ids, anchors, keep, draft_prefix):
+        if self.mtp_conditioning:
+            from aspec.models.dmtp import condition_noise_embeddings
+
+            return condition_noise_embeddings(self.draft_model, embeddings, input_ids,
+                                                anchors, keep, draft_prefix, self.block_size)
+        if draft_prefix is not None:
+            raise ValueError("This training wrapper does not accept a conditioned draft prefix")
+        return embeddings
 
     def _block_mask_options(self) -> dict:
         return {}
@@ -471,6 +518,7 @@ class DFlashModel(nn.Module):
         dsa_losses_out: Optional[list] = None,
         packed_document_lengths: Optional[tuple[int, ...]] = None,
         attention_mask: Optional[torch.Tensor] = None,
+        draft_prefix=None,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, int]:
         """
         Shared DFlash backbone (context features → anchor sampling → noise
@@ -630,6 +678,9 @@ class DFlashModel(nn.Module):
 
         # 3. Create noise embeddings (anchor token + MASK tokens)
         noise_embedding = self._create_noise_embed(input_ids, anchor_positions, block_keep_mask)
+        noise_embedding = self._condition_noise_embed(
+            noise_embedding, input_ids, anchor_positions, block_keep_mask, draft_prefix
+        )
 
         # 4. Create position IDs
         context_position_ids, draft_position_ids = self._create_position_ids(
@@ -963,6 +1014,7 @@ class DFlashModel(nn.Module):
         anchor_seed: Optional[int] = None,
         packed_document_lengths: Optional[tuple[int, ...]] = None,
         attention_mask: Optional[torch.Tensor] = None,
+        draft_prefix=None,
     ) -> Tuple[
         torch.Tensor,
         torch.Tensor,
@@ -979,8 +1031,7 @@ class DFlashModel(nn.Module):
             loss: scalar training loss (objective-weighted)
             accuracy: scalar accuracy (binary mask, no decay)
             loss_per_position: [block_size] mean loss at each within-block position
-                (index 0 is the anchor slot and always 0; indices 1..B-1 are the
-                predicted tokens at 1..B-1 steps past the anchor)
+                (slots before prediction_start are known inputs and always 0)
             acc_per_position: [block_size] mean accuracy at each within-block position
             count_per_position: [block_size] valid label count at each within-block
                 position before loss decay is applied
@@ -998,6 +1049,10 @@ class DFlashModel(nn.Module):
         qsa_losses = []
         dsa_losses = []
         # 1-6. Shared backbone → draft hidden states + anchor bookkeeping.
+        draft_prefix = self._prepare_draft_prefix(
+            input_ids, last_hidden_states, attention_mask, draft_prefix,
+            ctx_doc_ids, base_position_ids, packed_context_positions, packed_document_lengths,
+        )
         draft_hidden, anchor_positions, block_keep_mask, n_blocks = self._draft_backbone(
             input_ids,
             hidden_states_list,
@@ -1014,6 +1069,7 @@ class DFlashModel(nn.Module):
             dsa_losses_out=dsa_losses,
             packed_document_lengths=packed_document_lengths,
             attention_mask=attention_mask,
+            draft_prefix=draft_prefix,
         )
 
         if getattr(self.draft_model.config, "dsa_training_stage", None) == "indexer_warmup":
@@ -1054,7 +1110,7 @@ class DFlashModel(nn.Module):
         weight_mask = weight_mask * valid_label_mask.float()
 
         pos_in_block = torch.arange(self.block_size, device=device).view(1, 1, -1)
-        weight_mask = weight_mask * (pos_in_block > 0).float()
+        weight_mask = weight_mask * (pos_in_block >= self.prediction_start).float()
 
         # Gather original loss_mask at label positions
         original_loss_mask_gathered = torch.gather(
@@ -1077,7 +1133,7 @@ class DFlashModel(nn.Module):
         ce_per_token = F.cross_entropy(flat_logits, flat_targets, reduction="none")
 
         loss_per_token = self.ce_loss_alpha * ce_per_token
-        if self.uses_target_hidden_states:
+        if self.uses_target_distribution:
             if last_hidden_states is None:
                 raise ValueError(
                     "DFlash L1 distillation (l1_loss_alpha > 0) requires target "
@@ -1107,18 +1163,22 @@ class DFlashModel(nn.Module):
         ):
             # Loss decay: exp(-(k-1)/γ) so k=1 (1st prediction) gets weight 1.0
             k = torch.arange(self.block_size, device=device).view(1, 1, -1)
-            decay_weights = torch.exp(-(k - 1).clamp(min=0).float() / self.loss_decay_gamma)
+            decay_weights = torch.exp(
+                -(k - self.prediction_start).clamp(min=0).float() / self.loss_decay_gamma
+            )
             objective_weights = weight_mask * decay_weights
         elif self.loss_objective == "dpace":
             dpace_weights = torch.ones_like(weight_mask)
-            if self.block_size > 1:
+            if self.block_size > self.prediction_start:
                 with torch.no_grad():
-                    target_confidences = torch.exp(-loss_per_token_by_position[..., 1:].float())
+                    target_confidences = torch.exp(
+                        -loss_per_token_by_position[..., self.prediction_start:].float()
+                    )
                     dpace_pred_weights = _dpace_position_weights(
                         target_confidences,
                         self.dpace_alpha,
                     ).to(dtype=weight_mask.dtype)
-                dpace_weights[..., 1:] = dpace_pred_weights
+                dpace_weights[..., self.prediction_start:] = dpace_pred_weights
             objective_weights = weight_mask * dpace_weights
 
         flat_weights = objective_weights.view(-1)

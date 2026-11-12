@@ -143,7 +143,11 @@ class NativeMTPDraftModel(Eagle3DraftModel):
                     raise ValueError("Native MTP frozen tensor differs from its Target: " + name)
 
     def predict(self, hidden_states, input_ids, position_ids, layout=None):
-        embeds = self.pre_fc_norm_embedding(self.embed_tokens(input_ids))
+        return self.predict_embeddings(hidden_states, self.embed_tokens(input_ids), position_ids, layout)
+
+    def predict_embeddings(self, hidden_states, input_embeds, position_ids, layout=None):
+        """Shared native mathematics for trainable MTP and frozen feature extraction."""
+        embeds = self.pre_fc_norm_embedding(input_embeds)
         hidden = self.pre_fc_norm_hidden(hidden_states)
         projected = self.fc(torch.cat((embeds, hidden), dim=-1))
         rotary_positions = position_ids.unsqueeze(0).expand(3, -1, -1)

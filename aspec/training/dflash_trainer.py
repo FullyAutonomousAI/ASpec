@@ -92,6 +92,7 @@ class DFlashTrainer(Trainer):
         self.l1_loss_alpha = getattr(args, "dflash_l1_loss_alpha", 0.0)
         self._last_hs_prenorm = getattr(args, "last_hidden_states_prenorm", False)
         self.verifier_norm: Optional[torch.nn.Module] = None
+        self._mtp_binding_validated = False
 
     def init_model(
         self,
@@ -143,7 +144,10 @@ class DFlashTrainer(Trainer):
 
             draft_model = self._build_draft_model(config)
 
+        conditioning = getattr(config, "mtp_conditioning", None)
         if dist.get_rank() == 0:
+            if conditioning:
+                draft_model.initialize_mtp_conditioning(target_model_path)
             initial_path = getattr(self.args, "initial_draft_model_path", None)
             if initial_path:
                 checkpoint.load_initial_draft_weights(
@@ -197,6 +201,15 @@ class DFlashTrainer(Trainer):
         _unwrapped = getattr(self.model, "_orig_mod", self.model)  # torch.compile
         self.dflash = getattr(_unwrapped, "module", _unwrapped)  # DDP/replicate
         self.draft_model = self.dflash.draft_model
+        if conditioning:
+            self._anchor_slot_offset = self.dflash.prediction_start
+            if hasattr(self, "confidence_head_alpha"):
+                self._extra_loss_component_keys = [
+                    "ce_loss", "l1_loss", "confidence_loss",
+                    *(f"suffix_accept_rate@{index}" for index in range(
+                        self.block_size - self.dflash.prediction_start)),
+                    "suffix_tau_probabilistic",
+                ]
 
         total_steps = self.args.lr_total_steps
         decay_style = getattr(self.args, "lr_decay_style", "cosine")
@@ -234,6 +247,11 @@ class DFlashTrainer(Trainer):
         self.lr_scheduler = self.optimizer.lr_scheduler
 
         checkpoint_payload = checkpoint.load(self)
+        if conditioning:
+            self.draft_model.validate_mtp_binding(
+                target_model_path,
+                embedding_key=getattr(self.args, "embedding_key", "model.embed_tokens.weight"),
+            )
 
         self._init_target_lm_head(target_model_path)
 
@@ -248,6 +266,7 @@ class DFlashTrainer(Trainer):
         self.target_lm_head_weight = (
             None if self.target_lm_head is None else self.target_lm_head.lm_head.weight
         )
+        self._mtp_binding_validated = bool(conditioning)
 
         # Frozen Target helpers can initialize temporary random parameters.
         # Restore the training RNG only after all model initialization ends.
@@ -296,6 +315,27 @@ class DFlashTrainer(Trainer):
         from aspec.models.draft.moe import QwenDraftMoE
 
         draft = getattr(self, "draft_model", None)
+        if getattr(getattr(draft, "config", None), "mtp_conditioning", None):
+            import inspect
+            import sys
+
+            from aspec.config.mtp_conditioning import mtp_conditioning_semantics
+
+            status = dict(status)
+            status["mtp_conditioning"] = {
+                **mtp_conditioning_semantics(draft.config.to_dict()),
+                "prediction_start": self.dflash.prediction_start,
+                "frozen_source_parameters": sum(p.numel() for p in draft.mtp_source.parameters()),
+                "fusion_parameters": (sum(p.numel() for p in draft.mtp_fusion.parameters())
+                                      if draft.mtp_fusion is not None else 0),
+                "target_binding_validated": self._mtp_binding_validated,
+                "runtime_origin": {
+                    "python": sys.executable,
+                    "trainer": inspect.getfile(type(self)),
+                    "draft": inspect.getfile(type(draft)),
+                    "native_features": inspect.getfile(type(draft.mtp_source)),
+                },
+            }
         layers = list(getattr(draft, "layers", []))
         if layers and any(isinstance(layer.mlp, (QwenDraftMoE, LingDraftMoE)) for layer in layers):
             status = dict(status)
@@ -337,6 +377,8 @@ class DFlashTrainer(Trainer):
         return status
 
     def save_draft_model_for_serving(self, output_dir: str) -> None:
+        if getattr(self.draft_model.config, "mtp_conditioning", None):
+            raise NotImplementedError("MTP-conditioned Draft requires native --format aspec export")
         if getattr(self.draft_model.config, "ffn_type", "dense") != "dense":
             raise NotImplementedError(
                 "MoE Draft serving export is not yet supported; retain the complete training checkpoint"
@@ -633,6 +675,10 @@ class DFlashTrainer(Trainer):
 
         return self._aggregate_eval_metrics(all_metrics)
 
+    def _prediction_metric_prefix(self) -> str:
+        """MTP observations cover the unknown suffix conditional on visible T1."""
+        return "suffix_" if getattr(getattr(self, "dflash", None), "mtp_conditioning", None) else ""
+
     def _aggregate_eval_metrics(self, all_step_metrics: list[dict]) -> dict:
         if not all_step_metrics:
             return {}
@@ -659,7 +705,7 @@ class DFlashTrainer(Trainer):
             count_key="count_pp",
         )
 
-        # Drop anchor slot (index 0) — see _aggregate_metrics for rationale.
+        # Observe only unknown predictions, excluding visible T1 when conditioned.
         pred_loss_pp = avg_loss_pp[self._anchor_slot_offset :]
         pred_acc_pp = avg_acc_pp[self._anchor_slot_offset :]
         pred_count_pp = count_pp[self._anchor_slot_offset :]
@@ -673,22 +719,23 @@ class DFlashTrainer(Trainer):
         weighted_avg_loss, avg_acc = self._compute_scalar_metrics(
             pred_loss_pp, pred_acc_pp, pred_count_pp
         )
+        prefix = self._prediction_metric_prefix()
 
         metrics: dict = {
             "eval/avg_loss": weighted_avg_loss,
             "eval/avg_acc": avg_acc,
-            "eval/simulated_acc_len": simulated_acc_len,
+            f"eval/{prefix}simulated_acc_len": simulated_acc_len,
         }
         for i in range(pred_loss_pp.shape[0]):
-            metrics[f"eval/ploss_{i}"] = pred_loss_pp[i].item()
-            metrics[f"eval/acc_{i}"] = pred_acc_pp[i].item()
+            metrics[f"eval/{prefix}ploss_{i}"] = pred_loss_pp[i].item()
+            metrics[f"eval/{prefix}acc_{i}"] = pred_acc_pp[i].item()
 
         metrics.update(loss_components)
 
         if dist.get_rank() == 0:
             logger.info(
                 f"eval: loss={weighted_avg_loss:.4f}, acc={avg_acc:.4f}, "
-                f"sim_acc_len={simulated_acc_len:.2f}"
+                f"{prefix}sim_acc_len={simulated_acc_len:.2f}"
             )
 
         return metrics
@@ -844,9 +891,7 @@ class DFlashTrainer(Trainer):
             count_key="count_per_position",
         )
 
-        # Skip index 0 (anchor slot, always zero); indices 1..B-1 are the
-        # predicted tokens at 1..B-1 steps past the anchor. Re-index to 0..B-2
-        # so the naming matches Eagle3 (acc_0 = first predicted token).
+        # Re-index unknown predictions from zero; conditioned suffix_0 denotes T2.
         pred_loss_pp = avg_loss_pp[self._anchor_slot_offset :]
         pred_acc_pp = avg_acc_pp[self._anchor_slot_offset :]
         pred_count_pp = count_pp[self._anchor_slot_offset :]
@@ -860,11 +905,12 @@ class DFlashTrainer(Trainer):
             simulated_acc_len += cumulative
 
         avg_loss, avg_acc = self._compute_scalar_metrics(pred_loss_pp, pred_acc_pp, pred_count_pp)
+        prefix = self._prediction_metric_prefix()
 
         metrics = {
             "train/avg_loss": avg_loss,
             "train/avg_acc": avg_acc,
-            "train/simulated_acc_len": simulated_acc_len,
+            f"train/{prefix}simulated_acc_len": simulated_acc_len,
             "train/grad_norm": grad_norm.item() if grad_norm is not None else 0.0,
             "train/global_step": self.global_step,
             "train/lr": self.optimizer.get_learning_rate(),
@@ -872,8 +918,8 @@ class DFlashTrainer(Trainer):
         }
 
         for i in range(pred_loss_pp.shape[0]):
-            metrics[f"train/ploss_{i}"] = pred_loss_pp[i].item()
-            metrics[f"train/acc_{i}"] = pred_acc_pp[i].item()
+            metrics[f"train/{prefix}ploss_{i}"] = pred_loss_pp[i].item()
+            metrics[f"train/{prefix}acc_{i}"] = pred_acc_pp[i].item()
 
         metrics.update(loss_components)
 

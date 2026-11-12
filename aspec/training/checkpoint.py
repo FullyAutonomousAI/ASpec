@@ -802,6 +802,19 @@ def load_initial_draft_weights(
 
     manifest_path = checkpoint_path.parent / "export_manifest.json"
     native = manifest_path.is_file() and json.loads(manifest_path.read_text()).get("storage_format") == "aspec_native"
+    conditioning = getattr(draft_model.config, "mtp_conditioning", None)
+    transition = False
+    if conditioning:
+        saved_config_path = checkpoint_path.parent / "config.json"
+        if not saved_config_path.is_file():
+            raise ValueError("MTP conditioning warmstart requires the source Draft config")
+        saved_raw = json.loads(saved_config_path.read_text())
+        saved_conditioning = saved_raw.get("mtp_conditioning")
+        transition = saved_conditioning is None
+        if saved_conditioning is not None and saved_conditioning != conditioning:
+            raise ValueError("MTP conditioning warmstart policy differs from the requested Draft")
+        if transition and any(key.startswith(("mtp_source.", "mtp_fusion.")) for key in tensors):
+            raise ValueError("Plain Draft warmstart contains undeclared MTP tensors")
     if native:
         from aspec.draft_artifact import validate_native_asset
 
@@ -812,7 +825,10 @@ def load_initial_draft_weights(
             # This entry is weights-only initialization, not exact recovery.
             # Preserve model bindings and strict tensors while allowing the new
             # run to choose its indexer stage/objective policy.
-            validate_native_asset(checkpoint_path.parent, expected_config=draft_model.config, weights_only=True)
+            expected_config = draft_model.config
+            if transition:
+                expected_config = {**draft_model.config.to_dict(), "mtp_conditioning": None}
+            validate_native_asset(checkpoint_path.parent, expected_config=expected_config, weights_only=True)
         if hasattr(draft_model, "keep_csa_projection_precision"):
             draft_model.keep_csa_projection_precision()
         state = tensors
@@ -824,6 +840,15 @@ def load_initial_draft_weights(
         # DFlash-family serving assets normally borrow this frozen tensor from
         # the Target. The caller loads it from that Target immediately afterward.
         state["embed_tokens.weight"] = draft_model.state_dict()["embed_tokens.weight"]
+    if transition:
+        # Explicit weights-only phase: only the new, initialized frozen source
+        # and zero residual are absent from the predecessor. Everything else
+        # still uses the ordinary strict loader.
+        for key, value in draft_model.state_dict().items():
+            if key.startswith(("mtp_source.", "mtp_fusion.")):
+                if value.is_meta:
+                    raise ValueError("Initialize the frozen MTP source before weights-only warmstart")
+                state[key] = value
     draft_model.load_state_dict(state, strict=True)
     if hasattr(draft_model, "t2d"):
         from aspec.models.vocab import validate_vocab_mapping

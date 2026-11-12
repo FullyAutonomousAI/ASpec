@@ -31,6 +31,19 @@ from aspec.training.trainer_actor import TrainerActor
 def audit_state(trainer):
     result = _base_audit_state(trainer)
     draft = getattr(trainer, "draft_model", None)
+    if getattr(getattr(draft, "config", None), "mtp_conditioning", None):
+        from aspec.commands._checkpoint_audit import tensor_hash
+
+        result["mtp_conditioning"] = {
+            "policy": draft.config.mtp_conditioning,
+            "frozen": tensor_hash((n, p) for n, p in draft.named_parameters()
+                                  if n.startswith(("mtp_source.", "embed_tokens."))),
+            "fusion": tensor_hash(draft.mtp_fusion.named_parameters())
+                      if draft.mtp_fusion is not None else None,
+        }
+        expected = [p for p in draft.parameters() if p.requires_grad]
+        if [id(p) for p in trainer.optimizer.model_params] != [id(p) for p in expected]:
+            raise AssertionError("MTP conditioning optimizer ownership differs from the Draft")
     if getattr(getattr(draft, "config", None), "ffn_type", "dense") == "ling_moe":
         result["ling_expert_bias"] = [layer.mlp.gate.expert_bias.detach().cpu().tolist()
                                       for layer in draft.layers]
@@ -117,6 +130,10 @@ class AuditedTrainerActor(TrainerActor):
     def save_model(self, step, force_sync=False):
         super().save_model(step, force_sync)
         current = audit_state(self._trainer)
+        if current.get("mtp_conditioning"):
+            initial = json.loads((self._audit_root / f"recipe-audit-initial{self._audit_suffix}.json").read_text())
+            if current["mtp_conditioning"]["frozen"] != initial["mtp_conditioning"]["frozen"]:
+                raise AssertionError("MTP conditioning changed its frozen source/embedding")
         if current.get("eagle4", {}).get("policy", {}).get("stage") == "candidate_head":
             initial = json.loads((self._audit_root / f"recipe-audit-initial{self._audit_suffix}.json").read_text())
             if initial["eagle4"]["body"] != current["eagle4"]["body"]:

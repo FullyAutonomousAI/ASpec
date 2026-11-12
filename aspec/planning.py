@@ -558,7 +558,46 @@ def _load_draft_descriptor(config: DictConfig) -> dict[str, Any]:
     if structure["ffn_type"] != "dense" and _select(config, "training.compile_model", False):
         raise PlanCompileError("MoE Draft torch.compile is not yet supported; disable compile_model")
 
+    from aspec.config.mtp_conditioning import resolve_mtp_conditioning
+
+    try:
+        conditioning = resolve_mtp_conditioning({**raw, "layer_types": attention["layer_types"]})
+    except (ValueError, TypeError) as exc:
+        raise PlanCompileError(str(exc)) from exc
+    if conditioning:
+        from aspec.config.mtp_conditioning import validate_mtp_target_config
+
+        target_raw = _read_local_target_config(_select(config, "model.target_model_path"))
+        if target_raw is not None:
+            try:
+                validate_mtp_target_config(conditioning["native_config"], target_raw)
+            except ValueError as exc:
+                raise PlanCompileError(str(exc)) from exc
+        if family not in {"dflash", "dspark"}:
+            raise PlanCompileError("MTP conditioning requires DFlash or DSpark")
+        for key, required in (
+            ("draft_context_parallel_size", 1), ("micro_batch_size", 1),
+            ("dflash_packing", False), ("compile_model", False),
+            ("anchor_sampling_scope", "row"),
+            ("fsdp_strategy", "REPLICATE"),
+        ):
+            if _select(config, "training." + key) != required:
+                raise PlanCompileError(f"MTP conditioning requires training.{key}={required}")
+        if _select(config, "dataset.eval_micro_batch_size") not in {None, 1}:
+            raise PlanCompileError("MTP conditioning requires dataset.eval_micro_batch_size=1")
+        if conditioning["mode"] == "hidden" and not _select(config, "inference.store_last_hidden_states"):
+            raise PlanCompileError("MTP hidden conditioning requires inference.store_last_hidden_states=true")
+        start = 2 if family == "dflash" else 1
+        if _select(config, "training.dflash_block_size") <= start:
+            raise PlanCompileError("MTP conditioning requires at least one unknown suffix prediction")
+        if family == "dflash" and _select(config, "training.dflash_loss_objective") != "decay":
+            raise PlanCompileError("MTP-conditioned DFlash currently requires the decay objective")
+        if (_select(config, "training.training_num_nodes", 1) != 1
+                or _select(config, "cluster.mode", "single_node") != "single_node"):
+            raise PlanCompileError("MTP conditioning currently supports a single node")
+
     return {
+        "mtp_conditioning": conditioning,
         "structure": structure,
         "eagle4": eagle4,
         "attention": attention,
@@ -1307,6 +1346,18 @@ def _workload(
                                      ["embedding", "candidate_head"] + (["lm_head"] if _select(config, "model.freeze_lm_head", False) else []))
     if family in {"dspark", "dflash", "dflash2"}:
         objective["anchor_sampling_scope"] = anchor_scope
+    if draft.get("mtp_conditioning"):
+        from aspec.config.mtp_conditioning import mtp_conditioning_semantics
+
+        raw = json.loads(Path(draft["path"]).read_text())
+        objective["mtp_conditioning"] = mtp_conditioning_semantics(raw)
+        start = 2 if family == "dflash" else 1
+        objective.update(
+            prediction_start=start,
+            candidate_budget=objective["block_size"] - (1 if family == "dflash" else 0),
+            suffix_prediction_budget=objective["block_size"] - start,
+            acceptance_scope="teacher_forced_T1_conditional_suffix_only",
+        )
     objective.update(
         {
             "learning_rate": _select(config, "training.learning_rate"),
@@ -1392,6 +1443,10 @@ def _policy(
     runtime: Mapping[str, Any],
     context_contract: Mapping[str, Any],
 ) -> ExecutionPolicy:
+    from aspec.config.mtp_conditioning import mtp_conditioning_memory, resolve_mtp_conditioning
+
+    raw = json.loads(Path(_select(config, "model.draft_model_config")).read_text())
+    conditioning_memory = mtp_conditioning_memory(resolve_mtp_conditioning(raw))
     cluster_mode = _select(config, "cluster.mode", "single_node")
     data_plane = _select(config, "mooncake.data_plane", "store")
     transport_protocol = _select(config, "mooncake.protocol", "tcp")
@@ -1647,6 +1702,7 @@ def _policy(
         },
         capacity={
             "device_memory": {
+                **({"mtp_conditioning": conditioning_memory} if conditioning_memory else {}),
                 "sglang_static_fraction": (None if runtime["inference_engine_type"] == "offline"
                                            else _select(config, "inference.sglang.mem_fraction_static"))
             },

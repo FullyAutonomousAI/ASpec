@@ -71,6 +71,8 @@ def _cached_projection_chunks(counts, row_budget, block_size, *, copies, limit=N
 class DSparkModel(DFlashModel):
     """DSpark training wrapper (DFlash backbone + Markov/L1/confidence heads)."""
 
+    prediction_start = 0
+
     def __init__(
         self,
         draft_model,
@@ -146,7 +148,7 @@ class DSparkModel(DFlashModel):
         return None
 
     @property
-    def uses_target_hidden_states(self) -> bool:
+    def uses_target_distribution(self) -> bool:
         if self._indexer_warmup_kind() is not None:
             # The warm-up phase optimizes only the detached indexer KL.  Loading
             # verifier hidden states would retain and transfer target activations
@@ -154,19 +156,19 @@ class DSparkModel(DFlashModel):
             return False
         # The confidence head regresses onto an accept rate derived from the
         # verifier distribution, so the L1 weight alone does not cover it.
-        return super().uses_target_hidden_states or (
+        return super().uses_target_distribution or (
             self.draft_model.confidence_head is not None and self.confidence_head_alpha > 0
         )
 
     def _decay_weights(self, device: torch.device) -> torch.Tensor:
-        """exp(-k/gamma) over within-block position k (DeepSpec convention).
+        """Weight one at the first unknown prediction, then decay within the block.
 
-        Every slot 0..B-1 is a real prediction here, so slot 0 (the first
-        predicted token) gets weight 1.0 and later slots decay.
+        Plain DSpark starts at slot zero; conditioning makes T1 visible there
+        and starts the suffix weights at slot one.
         """
         k = torch.arange(self.block_size, device=device).view(1, 1, -1)
         if self.loss_decay_gamma is not None and self.loss_decay_gamma > 0:
-            return torch.exp(-k.float() / self.loss_decay_gamma)
+            return torch.exp(-(k - self.prediction_start).clamp_min(0).float() / self.loss_decay_gamma)
         return torch.ones_like(k, dtype=torch.float32)
 
     def forward(
@@ -184,6 +186,7 @@ class DSparkModel(DFlashModel):
         anchor_seed: Optional[int] = None,
         packed_document_lengths: Optional[tuple[int, ...]] = None,
         attention_mask: Optional[torch.Tensor] = None,
+        draft_prefix=None,
     ) -> Tuple[
         torch.Tensor,
         torch.Tensor,
@@ -211,6 +214,10 @@ class DSparkModel(DFlashModel):
         qsa_losses = []
         dsa_losses = []
         # ---- Shared DFlash backbone (steps 1-6) → draft hidden states ----
+        draft_prefix = self._prepare_draft_prefix(
+            input_ids, last_hidden_states, attention_mask, draft_prefix,
+            ctx_doc_ids, base_position_ids, packed_context_positions, packed_document_lengths,
+        )
         draft_hidden, anchor_positions, block_keep_mask, n_blocks = self._draft_backbone(
             input_ids,
             hidden_states_list,
@@ -227,11 +234,11 @@ class DSparkModel(DFlashModel):
             dsa_losses_out=dsa_losses,
             packed_document_lengths=packed_document_lengths,
             attention_mask=attention_mask,
+            draft_prefix=draft_prefix,
         )
         # ---- Labels + eval mask (DeepSpec convention) ----
-        # Slot j predicts the token at anchor+j+1 (the real anchor token seeds
-        # slot 0). All block_size slots are supervised — there is no masked
-        # anchor slot, unlike DFlash.
+        # Slot j predicts anchor+j+1. Plain DSpark supervises every slot;
+        # conditioning excludes visible T1 using prediction_start below.
         label_offsets = torch.arange(1, self.block_size + 1, device=device).view(1, 1, -1)
         label_indices = anchor_positions.unsqueeze(-1) + label_offsets  # [B, nb, bs]
         valid_label_mask = label_indices < seq_len
@@ -257,6 +264,9 @@ class DSparkModel(DFlashModel):
         eval_bool = block_keep_mask.unsqueeze(-1) & valid_label_mask & (target_loss_mask > 0.5)
         eval_bool = eval_bool.to(torch.int32).cumprod(dim=-1).bool()
         eval_mask = eval_bool.float()  # [B, nb, bs]
+        eval_mask = eval_mask * (
+            torch.arange(self.block_size, device=device) >= self.prediction_start
+        )
 
         decay_weight_mask = eval_mask * self._decay_weights(device)
         local_den = decay_weight_mask.sum()
@@ -304,7 +314,7 @@ class DSparkModel(DFlashModel):
         anchor_token_ids = torch.gather(input_ids, 1, anchor_positions)  # [B, nb]
         prev_token_ids = torch.cat([anchor_token_ids.unsqueeze(-1), target_ids[:, :, :-1]], dim=-1)
         aligned_hidden = None
-        if self.uses_target_hidden_states:
+        if self.uses_target_distribution:
             if last_hidden_states is None:
                 raise ValueError(
                     "DSpark L1/confidence losses require target last_hidden_states; set "
@@ -512,9 +522,17 @@ class DSparkModel(DFlashModel):
             **dsa_components,
         }
         if aligned_hidden is not None:
-            loss_components.update(acceptance_components(acceptance_totals))
+            observations = acceptance_components(acceptance_totals)
+            if self.mtp_conditioning:
+                observations = {
+                    ("suffix_tau_probabilistic" if key == "tau_probabilistic" else
+                     f"suffix_accept_rate@{int(key.split('@')[1]) - self.prediction_start}"): value
+                    for key, value in observations.items()
+                    if key == "tau_probabilistic" or int(key.split('@')[1]) >= self.prediction_start
+                }
+            loss_components.update(observations)
 
-        # ---- Metrics (cross-entropy based; all block_size slots are productive) ----
+        # ---- Metrics over the unknown prediction slots ----
         with torch.no_grad():
             accuracy = correct_position_sum.sum() / eval_mask.sum().clamp(min=1e-6)
             count_per_position = eval_mask.sum(dim=(0, 1))
@@ -608,7 +626,9 @@ class DSparkModel(DFlashModel):
             position_loss = (ce * eval_mask).sum((0, 1))
             position_correct = correct.float().sum((0, 1))
             acceptance_totals = (
-                acceptance_statistics(accept_rate, eval_mask)
+                F.pad(acceptance_statistics(
+                    accept_rate[..., self.prediction_start:], eval_mask[..., self.prediction_start:]
+                ), (self.prediction_start, 0))
                 if accept_rate is not None else logits.new_zeros(
                     (2, self.block_size + 1), dtype=torch.float32,
                 )

@@ -135,5 +135,16 @@
     "target_gpus": 8,
     "draft_gpus": 8,
     "native_only_export": false
+  },
+  "dmtp": {
+    "configs": [
+      "configs/recipes/qwen3_5_9b_dmtp.yaml"
+    ],
+    "model": "Qwen3.5-9B",
+    "nodes": 1,
+    "gpus": 8,
+    "target_gpus": 4,
+    "draft_gpus": 4,
+    "native_only_export": true
   }
 }

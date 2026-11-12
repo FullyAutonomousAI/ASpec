@@ -68,6 +68,10 @@ def validate_native_asset(path, *, expected_config=None, weights_only=False):
     config = AutoDraftModelConfig.from_dict(raw)
     if resolve_draft_algorithm(config.to_dict()) != manifest.get("algorithm"):
         raise ValueError("Native artifact algorithm identity mismatch")
+    from aspec.config.mtp_conditioning import mtp_conditioning_semantics
+
+    if manifest.get("mtp_conditioning") != mtp_conditioning_semantics(config.to_dict()):
+        raise ValueError("Native artifact MTP conditioning semantics mismatch")
     if expected_config is not None and draft_model_semantics(config) != draft_model_semantics(expected_config):
         raise ValueError("Native artifact semantics disagree with the requested Draft")
     from aspec.config.draft_attention import resolve_draft_attention
@@ -141,6 +145,8 @@ class BlockDraftConsumer:
         from aspec.models.dflash import DFlashModel
 
         self.model = draft_model.eval()
+        if getattr(draft_model.config, "mtp_conditioning", None):
+            raise ValueError("MTP-conditioned assets require an MTP-aware proposal consumer")
         self.algorithm = resolve_draft_algorithm(draft_model.config.to_dict())
         if self.algorithm not in {"dspark", "dflash"}:
             raise ValueError("BlockDraftConsumer requires a DSpark or DFlash asset")

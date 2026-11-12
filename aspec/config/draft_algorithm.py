@@ -73,4 +73,9 @@ def draft_model_semantics(config) -> dict:
         "enable_post_mlp_norm",
         "input_embedding_scale", "output_multiplier", "final_logit_softcapping", "is_causal",
     )
-    return {key: raw[key] for key in fields if key in raw}
+    semantics = {key: raw[key] for key in fields if key in raw}
+    if raw.get("mtp_conditioning") is not None:
+        from aspec.config.mtp_conditioning import resolve_mtp_conditioning
+
+        semantics["mtp_conditioning"] = resolve_mtp_conditioning(raw)
+    return semantics

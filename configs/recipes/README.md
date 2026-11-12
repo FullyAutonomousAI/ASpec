@@ -13,3 +13,5 @@ The [shared Target walkthrough](../../examples/qwen3-8b-shared-target/README.md)
 the recipe for experiment comparison, separate curves and recovery from different checkpoints.
 Supplemental variants belong under `configs/examples/`; benchmark comparisons remain under
 `configs/benchmarks/`.
+
+MTP-conditioned DSpark uses `qwen3_5_9b_dmtp.yaml`; the [workflow](../../examples/qwen3.5-9b-dmtp/README.md) describes hidden/token modes, DFlash selection and native-only assets.
