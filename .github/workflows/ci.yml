@@ -70,6 +70,7 @@ jobs:
             tests/test_eagle4_moe.py \
             tests/test_eagle4_validation.py \
             tests/test_fa4_import_compat.py \
+            tests/test_flex_attention_backend.py \
             tests/test_open_source_entrypoints.py \
             tests/test_release_audit.py \
             tests/test_shipped_config_defaults.py \

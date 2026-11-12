@@ -18,6 +18,10 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+# Adapted from TorchSpec 6c042a87140a84d13839e341ece2c5c3ada918bc,
+# torchspec/models/ops/flex_attention.py. ASpec defaults to the standard Triton
+# kernel while preserving explicit backend/legacy selectors: PyTorch 2.13 AUTO
+# can select decoding with no valid kernel choice for short GQA training rows.
 from functools import lru_cache
 
 import torch
@@ -82,6 +86,11 @@ def compile_friendly_flex_attention(
     value: torch.Tensor,
     **kwargs,
 ) -> torch.Tensor:
+    kernel_options = dict(kwargs.get("kernel_options") or {})
+    # PyTorch rejects BACKEND combined with the legacy force-attention selector.
+    if "FORCE_USE_FLEX_ATTENTION" not in kernel_options:
+        kernel_options.setdefault("BACKEND", "TRITON")
+    kwargs["kernel_options"] = kernel_options
     # First call initialise singleton wrapper object, second call invokes the object method to return compiled flex attention
     # Do not use compiled version if already compiling forward (it raises issues)
     flex_attention_compiled = (

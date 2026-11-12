@@ -513,5 +513,41 @@ class TestCompiledBlockMask(unittest.TestCase):
         torch.testing.assert_close(built.to_dense(), eager.to_dense())
 
 
+@pytest.mark.parametrize("kernel_options", [None, {"FORCE_USE_FLEX_ATTENTION": True}],
+                         ids=["default", "legacy-force"])
+@pytest.mark.parametrize("outer_compile", [False, True], ids=["wrapper", "nested-compile"])
+def test_short_gqa_training_matches_sdpa_in_output_and_gradients(kernel_options, outer_compile):
+    """AUTO selected decoding with no valid choice for this PyTorch 2.13 shape."""
+    from torch.nn.attention import SDPBackend, sdpa_kernel
+
+    from aspec.models.dflash import _create_dflash_mask_mod
+
+    anchors = torch.arange(20, 36, device="cuda")[None]
+    keep = torch.ones_like(anchors, dtype=torch.bool)
+    mask_mod = _create_dflash_mask_mod(anchors, keep, 150, 7)
+    block_mask = create_block_mask(mask_mod, 1, None, 112, 262, device="cuda")
+    dense_mask = mask_mod(0, 0, torch.arange(112, device="cuda")[:, None],
+                          torch.arange(262, device="cuda")[None, :])[None, None]
+    generator = torch.Generator(device="cuda").manual_seed(123)
+    actual = [torch.randn(*shape, device="cuda", dtype=torch.bfloat16, requires_grad=True,
+                          generator=generator)
+              for shape in ((1, 32, 112, 128), (1, 8, 262, 128), (1, 8, 262, 128))]
+    reference = [value.detach().clone().requires_grad_() for value in actual]
+    attention = (torch.compile(compile_friendly_flex_attention, fullgraph=True)
+                 if outer_compile else compile_friendly_flex_attention)
+    output = attention(*actual, block_mask=block_mask, enable_gqa=True, kernel_options=kernel_options)
+    with sdpa_kernel(SDPBackend.MATH):
+        expected = torch.nn.functional.scaled_dot_product_attention(
+            *reference, attn_mask=dense_mask, enable_gqa=True)
+    output.float().square().mean().backward()
+    expected.float().square().mean().backward()
+    for value, target in [(output, expected), *zip(
+        [value.grad for value in actual], [value.grad for value in reference], strict=True
+    )]:
+        assert torch.isfinite(value).all()
+        relative = (value.float() - target.float()).norm() / target.float().norm().clamp_min(1e-12)
+        assert relative < 0.01, float(relative)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -104,3 +104,11 @@ or optimizer initialization.
 ### Draft activation and RoPE
 
 Dense DSpark/DFlash FFNs execute the configured `hidden_act` through Transformers' activation registry; the default remains SiLU. Their standard GQA path supports unscaled, linear and YaRN RoPE through `rope_scaling` or `rope_parameters`, using the pinned Transformers scaling functions. YaRN uses `original_max_position_embeddings` when provided and otherwise the configured maximum context. Unsupported GQA scaling types and partial rotary dimensions fail during configuration loading. MLA and compressed/indexer rotary contracts remain structure-specific.
+
+### FlexAttention kernel selection
+
+The shared `flex_attention` wrapper defaults to the standard Triton kernel
+(`BACKEND=TRITON`). This avoids PyTorch 2.13's automatic decoding selection failing
+with `NoValidChoicesError` for short GQA training rows. Explicit `BACKEND` choices
+and the legacy `FORCE_USE_FLEX_ATTENTION` selector are preserved. GPU regressions
+compare outputs and Q/K/V gradients with SDPA, including nested `torch.compile`.
